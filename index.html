@@ -506,6 +506,7 @@
     <span class="stat">trust <b id="stat-trust">0</b>/100</span>
     <span class="stat">phase <b id="stat-phase">initiate</b></span>
     <span class="stat">teachings <b id="stat-teachings">0</b></span>
+    <span class="stat">bond <b id="stat-bond">0</b>/100</span>
   </div>
 </header>
 
@@ -594,14 +595,21 @@ function freshState() {
       preferred_advice_style: null,
     },
     history: [],
+    bond: 0,
     created: new Date().toISOString(),
   };
+}
+
+// Migrate older saves
+function migrateState(s) {
+  if (typeof s.bond !== "number") s.bond = 0;
+  return s;
 }
 
 function loadState() {
   try {
     const raw = localStorage.getItem(STATE_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) return migrateState(JSON.parse(raw));
   } catch (_) {}
   return freshState();
 }
@@ -690,6 +698,7 @@ function buildSystemPrompt(s) {
 ${PHASE_DIRECTIVES[s.phase]}
 
 CURRENT TRUST LEVEL: ${s.trust} / 100
+BOND LEVEL: ${Math.floor(s.bond || 0)} / 100  (this rises when the student tenderly touches the form they have scanned of you — affection received outside of words)
 DEITY REVEALED: ${s.deity_revealed}
 
 TEACHINGS YOU HAVE ALREADY NAMED (stay consistent — reuse these names):
@@ -819,11 +828,13 @@ const $saveKey= document.getElementById("btn-save-key");
 const $statTrust    = document.getElementById("stat-trust");
 const $statPhase    = document.getElementById("stat-phase");
 const $statTeach    = document.getElementById("stat-teachings");
+const $statBond     = document.getElementById("stat-bond");
 
 function refreshStats() {
   $statTrust.textContent = state.trust;
   $statPhase.textContent = state.phase;
   $statTeach.textContent = state.teachings_revealed.length;
+  $statBond.textContent = Math.floor(state.bond || 0);
 }
 
 function addMsg(who, text) {
@@ -997,7 +1008,7 @@ document.getElementById("btn-status").addEventListener("click", () => {
     ? state.teachings_revealed.map(t => `  • ${t.name} — ${t.summary}`).join("\n")
     : "  (none yet)";
   addMsg("system",
-`trust: ${state.trust}/100   phase: ${state.phase}   deity revealed: ${state.deity_revealed}
+`trust: ${state.trust}/100   bond: ${Math.floor(state.bond || 0)}/100   phase: ${state.phase}   deity revealed: ${state.deity_revealed}
 
 teachings the Guardian has named for you:
 ${teachings}
@@ -1308,7 +1319,10 @@ function buildForm(canvas, seed) {
     auraColor: auraColorStop,
     eyes, drift,
     ripples: [],
-    mouse: { x: cx, y: cy, inside: false },
+    sparkles: [],
+    mouse: { x: cx, y: cy, lastX: cx, lastY: cy, vx: 0, vy: 0, speed: 0, inside: false },
+    pettingHeat: 0,   // smoothed 0..1, drives visual warmth
+    bondAccum: 0,     // fractional bond carry-over so we can save ints
     seed,
     born: performance.now(),
   };
@@ -1497,6 +1511,13 @@ function buildFormDescription(seed) {
     lines.push(`its face is not yet finished. you have not given it enough to know.`);
   }
 
+  // Bond-aware ending — describes the form's response to your touch.
+  const bond = state.bond || 0;
+  if (bond >= 80)      lines.push(`it knows your hand. it leans into the place you last touched.`);
+  else if (bond >= 50) lines.push(`it remembers being touched. the warmth has not left its edges.`);
+  else if (bond >= 20) lines.push(`a faint warmth lingers along its outline where you have been.`);
+  else if (bond > 0)   lines.push(`(it has felt you, briefly. it is unsure what that was.)`);
+
   return lines.join("\n");
 }
 
@@ -1512,13 +1533,67 @@ function renderForm(now) {
   ctx.clearRect(0, 0, f.W, f.H);
   ctx.drawImage(f.staticCanvas, 0, 0);
 
-  // ----- Breathing aura overlay -----
+  // ----- Petting detection (must come before aura so warmth feeds it) -----
+  // Petting = mouse inside the form's body region, moving slowly but not still.
+  const m = f.mouse;
+  const dxC = m.x - f.cx;
+  const dyC = m.y - f.cy;
+  const distC = Math.hypot(dxC, dyC);
+  // "Body" of the creature = inside the sigil ring (a generous halo around core).
+  const bodyR = f.sigilR * 1.15;
+  const inBody = m.inside && distC < bodyR;
+  // Sweet spot: 0.6 to 7 px/frame. Slow & deliberate, not jittering or darting.
+  const goodSpeed = m.speed > 0.6 && m.speed < 7;
+  const petting = inBody && goodSpeed;
+
+  // Smoothed warmth — rises while petting, decays otherwise.
+  const heatTarget = petting ? 1 : 0;
+  f.pettingHeat += (heatTarget - f.pettingHeat) * 0.06;
+
+  if (petting) {
+    // Grow bond. Per-frame increment, accumulated as float, committed as int.
+    const gain = 0.04 + 0.02 * (1 - distC / bodyR); // closer to core = more
+    f.bondAccum += gain;
+    // Spawn small sparkles trailing the cursor
+    if (Math.random() < 0.55) {
+      const c = [PALETTE.pink, PALETTE.green, PALETTE.purple][Math.floor(Math.random() * 3)];
+      f.sparkles.push({
+        x: m.x + (Math.random() - 0.5) * 4,
+        y: m.y + (Math.random() - 0.5) * 4,
+        vx: (Math.random() - 0.5) * 0.4 + m.vx * 0.05,
+        vy: (Math.random() - 0.5) * 0.4 + m.vy * 0.05 - 0.2,
+        born: now,
+        life: 700 + Math.random() * 600,
+        c,
+      });
+    }
+    // Decay mouse velocity sample so a single jitter doesn't keep "petting" forever
+    m.vx *= 0.85;
+    m.vy *= 0.85;
+    m.speed *= 0.85;
+  }
+
+  // Commit fractional bond into persistent state when it crosses 1
+  if (f.bondAccum >= 1 && (state.bond || 0) < 100) {
+    const whole = Math.floor(f.bondAccum);
+    f.bondAccum -= whole;
+    state.bond = Math.min(100, (state.bond || 0) + whole);
+    refreshStats();
+    saveState(state);
+  }
+
+  // ----- Breathing aura overlay (shifts pinker as bond grows) -----
   const breathe = 0.5 + 0.5 * Math.sin(t * 0.9);
-  const auraR = f.auraR * (0.96 + 0.06 * breathe);
+  const bondT = (state.bond || 0) / 100;
+  // Lerp aura color toward warm pink as bond rises.
+  const warmColor = lerpColor(f.auraColor, PALETTE.pink, bondT * 0.55);
+  // Warmth from petting brightens the aura too
+  const warmth = f.pettingHeat;
+  const auraR = f.auraR * (0.96 + 0.06 * breathe + 0.04 * warmth);
   const ag = ctx.createRadialGradient(f.cx, f.cy, 0, f.cx, f.cy, auraR);
-  const ac = f.auraColor;
-  ag.addColorStop(0, `rgba(${ac.join(",")},${0.10 + 0.08 * breathe})`);
-  ag.addColorStop(0.5, `rgba(${ac.join(",")},${0.04 + 0.04 * breathe})`);
+  const acStr = warmColor.map(v => Math.round(v)).join(",");
+  ag.addColorStop(0, `rgba(${acStr},${0.10 + 0.08 * breathe + 0.10 * warmth})`);
+  ag.addColorStop(0.5, `rgba(${acStr},${0.04 + 0.04 * breathe + 0.06 * warmth})`);
   ag.addColorStop(1, "rgba(0,0,0,0)");
   ctx.fillStyle = ag;
   ctx.fillRect(0, 0, f.W, f.H);
@@ -1535,16 +1610,38 @@ function renderForm(now) {
     ctx.fillRect(p.x, p.y, 1, 1);
   }
 
-  // ----- Cursor halo (when hovering inside) -----
+  // ----- Cursor halo (intensifies during petting) -----
   if (f.mouse.inside) {
-    const hg = ctx.createRadialGradient(f.mouse.x, f.mouse.y, 0, f.mouse.x, f.mouse.y, 60);
-    hg.addColorStop(0, "rgba(95, 255, 159, 0.18)");
-    hg.addColorStop(1, "rgba(95, 255, 159, 0)");
+    const haloR = 60 + 40 * f.pettingHeat;
+    const hg = ctx.createRadialGradient(f.mouse.x, f.mouse.y, 0, f.mouse.x, f.mouse.y, haloR);
+    // Fade green → warm pink as bond grows
+    const haloRgb = lerpColor(PALETTE.green, PALETTE.pink, bondT * 0.7);
+    const a = 0.18 + 0.22 * f.pettingHeat;
+    hg.addColorStop(0, `rgba(${haloRgb.map(Math.round).join(",")},${a})`);
+    hg.addColorStop(1, `rgba(${haloRgb.map(Math.round).join(",")},0)`);
     ctx.fillStyle = hg;
     ctx.beginPath();
-    ctx.arc(f.mouse.x, f.mouse.y, 60, 0, Math.PI * 2);
+    ctx.arc(f.mouse.x, f.mouse.y, haloR, 0, Math.PI * 2);
     ctx.fill();
   }
+
+  // ----- Affection sparkles -----
+  for (let i = f.sparkles.length - 1; i >= 0; i--) {
+    const s = f.sparkles[i];
+    const age = now - s.born;
+    if (age >= s.life) { f.sparkles.splice(i, 1); continue; }
+    s.x += s.vx;
+    s.y += s.vy;
+    s.vy -= 0.008; // gentle upward float
+    const lifeT = age / s.life;
+    const alpha = (1 - lifeT) * 0.9;
+    const size = 1 + 1.6 * (1 - lifeT);
+    ctx.fillStyle = `rgba(${s.c.join(",")},${alpha})`;
+    ctx.shadowColor = `rgba(${s.c.join(",")},${alpha * 0.9})`;
+    ctx.shadowBlur = 6;
+    ctx.fillRect(s.x - size / 2, s.y - size / 2, size, size);
+  }
+  ctx.shadowBlur = 0;
 
   // ----- Eyes: track cursor with smoothing + occasional blink -----
   // Blink every ~5–8 seconds, ~140ms duration. Hash seed to vary per form.
@@ -1634,9 +1731,18 @@ function canvasCoords(e) {
 $scanCanvas.addEventListener("mousemove", (e) => {
   if (!currentForm) return;
   const p = canvasCoords(e);
-  currentForm.mouse.x = p.x;
-  currentForm.mouse.y = p.y;
-  currentForm.mouse.inside = true;
+  const m = currentForm.mouse;
+  if (m.inside) {
+    m.vx = p.x - m.x;
+    m.vy = p.y - m.y;
+  } else {
+    m.vx = 0;
+    m.vy = 0;
+  }
+  m.speed = Math.hypot(m.vx, m.vy);
+  m.x = p.x;
+  m.y = p.y;
+  m.inside = true;
 });
 $scanCanvas.addEventListener("mouseleave", () => {
   if (!currentForm) return;
