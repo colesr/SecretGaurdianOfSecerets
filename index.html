@@ -193,6 +193,13 @@
     box-shadow: 0 0 12px rgba(95, 255, 159, 0.5);
   }
 
+  #main {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+    position: relative;
+    z-index: 1;
+  }
   #chat {
     flex: 1;
     overflow-y: auto;
@@ -200,8 +207,103 @@
     display: flex;
     flex-direction: column;
     gap: 22px;
+    min-width: 0;
+  }
+  #sidebar {
+    width: 260px;
+    flex-shrink: 0;
+    border-left: 1px solid var(--line);
+    background: linear-gradient(180deg, #061010 0%, var(--bg) 100%);
+    padding: 18px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .side-label {
+    font-size: 10px;
+    color: var(--green);
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    text-shadow: 0 0 6px rgba(95,255,159,0.4);
+  }
+  .side-canvas-wrap {
     position: relative;
-    z-index: 1;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    background: #02050a;
+    border: 1px solid var(--purple-dim);
+    overflow: hidden;
+  }
+  #side-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    cursor: crosshair;
+  }
+  .side-canvas-wrap::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      0deg,
+      rgba(95, 255, 159, 0.04) 0px,
+      rgba(95, 255, 159, 0.04) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+    mix-blend-mode: screen;
+  }
+  .side-empty {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--purple);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    text-align: center;
+    pointer-events: none;
+  }
+  .side-empty span {
+    color: var(--ink-dim);
+    font-size: 10px;
+    margin-top: 4px;
+  }
+  .side-canvas-wrap.has-form .side-empty { display: none; }
+  .side-meta {
+    font-size: 11px;
+    color: var(--ink);
+    line-height: 1.5;
+    border-left: 2px solid var(--pink-dim);
+    padding-left: 10px;
+    min-height: 2em;
+  }
+  .side-hint {
+    font-size: 9px;
+    color: var(--ink-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-top: auto;
+  }
+  .side-canvas-wrap.attention {
+    animation: attentionShake 0.5s ease-in-out 4;
+    border-color: var(--pink);
+    box-shadow: 0 0 18px rgba(232, 160, 208, 0.45);
+  }
+  @keyframes attentionShake {
+    0%, 100% { transform: translate(0,0); }
+    25% { transform: translate(-2px, 1px); }
+    50% { transform: translate(2px, -1px); }
+    75% { transform: translate(-1px, -2px); }
+  }
+  @media (max-width: 760px) {
+    #main { flex-direction: column; }
+    #sidebar { width: 100%; border-left: none; border-top: 1px solid var(--line); }
+    .side-canvas-wrap { max-width: 280px; align-self: center; }
   }
   .msg {
     max-width: 720px;
@@ -522,7 +624,18 @@
   </div>
 </section>
 
-<main id="chat" aria-live="polite"></main>
+<div id="main">
+  <main id="chat" aria-live="polite"></main>
+  <aside id="sidebar">
+    <div class="side-label">▸ Companion</div>
+    <div class="side-canvas-wrap">
+      <canvas id="side-canvas" width="480" height="480"></canvas>
+      <div class="side-empty" id="side-empty">// no form scanned yet<br><span>open Scan Form to render</span></div>
+    </div>
+    <div class="side-meta" id="side-meta">awaiting signal</div>
+    <div class="side-hint">stroke gently to bond · click for ripples</div>
+  </aside>
+</div>
 
 <div id="toast"></div>
 
@@ -1154,110 +1267,67 @@ const PALETTE = {
 let currentForm = null;
 let animHandle = null;
 
-function buildForm(canvas, seed) {
+const SCHEMES = [
+  { name: "verdant",    primary: PALETTE.green,  secondary: PALETTE.purple, accent: PALETTE.pink   },
+  { name: "rosethorn",  primary: PALETTE.pink,   secondary: PALETTE.green,  accent: PALETTE.purple },
+  { name: "amethyst",   primary: PALETTE.purple, secondary: PALETTE.pink,   accent: PALETTE.green  },
+  { name: "duskglow",   primary: PALETTE.green,  secondary: PALETTE.pink,   accent: PALETTE.purple },
+  { name: "feverbloom", primary: PALETTE.pink,   secondary: PALETTE.purple, accent: PALETTE.green  },
+];
+
+const SPECIES_NAMES = [
+  "orb", "wisp", "crab", "sapling", "serpent",
+  "constellation", "moth", "bloom", "seraph", "drone",
+];
+
+function buildForm(seed) {
+  const W = 480, H = 480;
+  const cx = W / 2, cy = H / 2;
   const rng = mulberry32(seed);
   const r = (a, b) => a + (b - a) * rng();
   const ri = (a, b) => Math.floor(r(a, b + 1));
   const pick = arr => arr[Math.floor(rng() * arr.length)];
 
-  const W = canvas.width, H = canvas.height;
-  const cx = W / 2, cy = H / 2;
-
-  // Static layer — drawn once into an offscreen canvas, then blitted each frame.
   const staticCanvas = document.createElement("canvas");
   staticCanvas.width = W;
   staticCanvas.height = H;
   const ctx = staticCanvas.getContext("2d");
 
-  // Background — deep void with subtle green glow
+  const species = pick(SPECIES_NAMES);
+  const scheme = pick(SCHEMES);
+
+  // Background void
   ctx.fillStyle = "#02050a";
   ctx.fillRect(0, 0, W, H);
 
   // Star field
-  ctx.save();
   for (let i = 0; i < 80; i++) {
     const x = rng() * W, y = rng() * H;
     const a = r(0.05, 0.4);
-    ctx.fillStyle = `rgba(95, 255, 159, ${a})`;
+    ctx.fillStyle = `rgba(${scheme.primary.join(",")},${a})`;
     ctx.fillRect(x, y, 1, 1);
   }
-  ctx.restore();
 
-  // Aura — radial halo (base; the dynamic loop adds a breathing layer on top)
+  // Base aura halo
   const auraR = r(W * 0.28, W * 0.42);
-  const auraColorStop = pick([PALETTE.green, PALETTE.purple, PALETTE.pink]);
+  const auraColor = scheme.primary;
   const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, auraR);
-  grad.addColorStop(0, `rgba(${auraColorStop.join(",")},0.30)`);
-  grad.addColorStop(0.5, `rgba(${auraColorStop.join(",")},0.10)`);
+  grad.addColorStop(0, `rgba(${auraColor.join(",")},0.30)`);
+  grad.addColorStop(0.5, `rgba(${auraColor.join(",")},0.10)`);
   grad.addColorStop(1, "rgba(0,0,0,0)");
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, W, H);
 
-  // Tendrils — nature roots/branches emanating from the form
-  const tendrilCount = ri(6, 14);
-  const trustBoost = state.trust / 100;
-  for (let i = 0; i < tendrilCount; i++) {
-    const angle = (i / tendrilCount) * Math.PI * 2 + r(-0.2, 0.2);
-    const len = r(W * 0.18, W * 0.42) * (0.7 + trustBoost * 0.6);
-    const startR = r(W * 0.06, W * 0.12);
-    const sx = cx + Math.cos(angle) * startR;
-    const sy = cy + Math.sin(angle) * startR;
-    drawTendril(ctx, sx, sy, angle, len, 3, rng);
+  // Build species body
+  const params = { ctx, W, H, cx, cy, scheme, rng, r, ri, pick, trustBoost: state.trust / 100 };
+  const body = SPECIES_BUILDERS[species](params);
+
+  // Sigil overlay
+  if (body.sigilType && body.sigilType !== "none") {
+    drawSigil(ctx, cx, cy, body.sigilR, rng, scheme, body.sigilType);
   }
 
-  // Energy filaments — thin glowing arcs across the void
-  const filaments = ri(8, 18);
-  for (let i = 0; i < filaments; i++) {
-    const a1 = rng() * Math.PI * 2;
-    const a2 = a1 + r(0.4, 1.4);
-    const rad = r(W * 0.18, W * 0.36);
-    ctx.beginPath();
-    ctx.arc(cx, cy, rad, a1, a2);
-    const fc = pick([PALETTE.green, PALETTE.pink, PALETTE.purple]);
-    ctx.strokeStyle = `rgba(${fc.join(",")},${r(0.15, 0.5)})`;
-    ctx.lineWidth = r(0.6, 1.6);
-    ctx.shadowColor = `rgba(${fc.join(",")},0.7)`;
-    ctx.shadowBlur = 6;
-    ctx.stroke();
-  }
-  ctx.shadowBlur = 0;
-
-  // Core face mass
-  const coreR = r(W * 0.13, W * 0.18);
-  const coreGrad = ctx.createRadialGradient(cx, cy - coreR * 0.2, coreR * 0.2, cx, cy, coreR);
-  coreGrad.addColorStop(0, "rgba(95, 255, 159, 0.55)");
-  coreGrad.addColorStop(0.6, "rgba(90, 63, 136, 0.4)");
-  coreGrad.addColorStop(1, "rgba(0, 0, 0, 0.85)");
-  ctx.fillStyle = coreGrad;
-  ctx.beginPath();
-  // Slightly irregular core
-  const lobes = ri(5, 9);
-  for (let i = 0; i <= 64; i++) {
-    const t = (i / 64) * Math.PI * 2;
-    const wob = 1 + Math.sin(t * lobes + r(0, 6)) * 0.07;
-    const x = cx + Math.cos(t) * coreR * wob;
-    const y = cy + Math.sin(t) * coreR * wob;
-    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-  }
-  ctx.closePath();
-  ctx.fill();
-
-  // Outline of the core
-  ctx.strokeStyle = "rgba(95, 255, 159, 0.6)";
-  ctx.lineWidth = 1;
-  ctx.shadowColor = "rgba(95, 255, 159, 0.7)";
-  ctx.shadowBlur = 8;
-  ctx.stroke();
-  ctx.shadowBlur = 0;
-
-  // Mouth — thin horizontal sigil-line, sometimes a row of dots
-  drawMouth(ctx, cx, cy, coreR, rng);
-
-  // Sigil overlay — geometric occult symbol drifting in front
-  const sigilR = coreR * r(1.3, 1.9);
-  drawSigil(ctx, cx, cy, sigilR, rng);
-
-  // Glitch chromatic shift bands
+  // Glitch bands
   const bands = ri(2, 5);
   for (let i = 0; i < bands; i++) {
     const by = ri(0, H);
@@ -1266,69 +1336,150 @@ function buildForm(canvas, seed) {
     ctx.putImageData(slice, ri(-6, 6), by);
   }
 
-  // Color fringe — fake chromatic aberration
+  // Chromatic fringe
   ctx.globalCompositeOperation = "screen";
-  ctx.fillStyle = "rgba(232, 160, 208, 0.06)";
+  ctx.fillStyle = `rgba(${scheme.accent.join(",")},0.06)`;
   ctx.fillRect(2, 0, W, H);
-  ctx.fillStyle = "rgba(95, 255, 159, 0.05)";
+  ctx.fillStyle = `rgba(${scheme.primary.join(",")},0.05)`;
   ctx.fillRect(-2, 0, W, H);
   ctx.globalCompositeOperation = "source-over";
 
   // Frame
-  ctx.strokeStyle = "rgba(95, 255, 159, 0.25)";
+  ctx.strokeStyle = `rgba(${scheme.primary.join(",")},0.25)`;
   ctx.lineWidth = 1;
   ctx.strokeRect(0.5, 0.5, W - 1, H - 1);
 
-  // ----- Compute eye positions (drawn dynamically) -----
-  const eyeCount = pick([2, 2, 2, 3, 1]);
-  const eyes = [];
-  for (let i = 0; i < eyeCount; i++) {
-    let ex, ey;
-    if (eyeCount === 1) { ex = cx; ey = cy - coreR * 0.1; }
-    else if (eyeCount === 2) {
-      const offset = coreR * 0.42;
-      ex = cx + (i === 0 ? -offset : offset);
-      ey = cy - coreR * r(0.05, 0.2);
-    } else {
-      if (i === 0)      { ex = cx - coreR * 0.42; ey = cy + coreR * 0.05; }
-      else if (i === 1) { ex = cx + coreR * 0.42; ey = cy + coreR * 0.05; }
-      else              { ex = cx;                ey = cy - coreR * 0.5;  }
-    }
-    const eRad = coreR * r(0.13, 0.22);
-    eyes.push({ x: ex, y: ey, r: eRad, px: 0, py: 0 });
-  }
-
-  // ----- Drift particles (also dynamic) -----
+  // Drift particles
   const drift = [];
   for (let i = 0; i < 90; i++) {
     const a = rng() * Math.PI * 2;
-    const rad = r(coreR * 0.6, W * 0.46);
+    const rad = r(body.coreR * 0.6, W * 0.46);
     drift.push({
       x: cx + Math.cos(a) * rad,
       y: cy + Math.sin(a) * rad,
       vx: (rng() - 0.5) * 0.15,
       vy: (rng() - 0.5) * 0.15,
       a: r(0.2, 0.7),
-      c: pick([PALETTE.green, PALETTE.pink, PALETTE.purple]),
+      c: pick([scheme.primary, scheme.secondary, scheme.accent]),
       twinkleOffset: rng() * Math.PI * 2,
     });
   }
 
+  const nowMs = performance.now();
   return {
-    canvas, staticCanvas, W, H, cx, cy, coreR, sigilR, auraR,
-    auraColor: auraColorStop,
-    eyes, drift,
+    staticCanvas, W, H, cx, cy,
+    species,
+    schemeName: scheme.name,
+    scheme,
+    coreR: body.coreR,
+    sigilR: body.sigilR,
+    bodyR: body.bodyR,
+    auraR,
+    auraColor,
+    eyes: body.eyes,
+    drift,
     ripples: [],
     sparkles: [],
-    mouse: { x: cx, y: cy, lastX: cx, lastY: cy, vx: 0, vy: 0, speed: 0, inside: false },
-    pettingHeat: 0,   // smoothed 0..1, drives visual warmth
-    bondAccum: 0,     // fractional bond carry-over so we can save ints
+    targets: [],
+    pettingHeat: 0,
+    bondAccum: 0,
+    blinkAmt: 0,
     seed,
-    born: performance.now(),
+    born: nowMs,
+    lastInteractionAt: nowMs,
+    nextAttentionAt: nowMs + 35000 + Math.random() * 25000,
+    attentionUntil: 0,
+    attentionMode: null,
+    wiggleOffsetX: 0,
+    wiggleOffsetY: 0,
   };
 }
 
-function drawTendril(ctx, x, y, angle, len, depth, rng) {
+// ===== Shared body helpers =====
+
+function makeEyes(cx, cy, coreR, count, rRange) {
+  const eyes = [];
+  for (let i = 0; i < count; i++) {
+    let ex, ey;
+    if (count === 1) { ex = cx; ey = cy - coreR * 0.1; }
+    else if (count === 2) {
+      const offset = coreR * 0.42;
+      ex = cx + (i === 0 ? -offset : offset);
+      ey = cy - coreR * rRange(0.05, 0.2);
+    } else {
+      if (i === 0)      { ex = cx - coreR * 0.42; ey = cy + coreR * 0.05; }
+      else if (i === 1) { ex = cx + coreR * 0.42; ey = cy + coreR * 0.05; }
+      else              { ex = cx;                ey = cy - coreR * 0.5;  }
+    }
+    const eRad = coreR * rRange(0.13, 0.22);
+    eyes.push({ x: ex, y: ey, r: eRad, px: 0, py: 0 });
+  }
+  return eyes;
+}
+
+function drawSoftCore(ctx, cx, cy, R, scheme, lobes, rngFn) {
+  const coreGrad = ctx.createRadialGradient(cx, cy - R * 0.2, R * 0.2, cx, cy, R);
+  coreGrad.addColorStop(0, `rgba(${scheme.primary.join(",")},0.55)`);
+  coreGrad.addColorStop(0.6, `rgba(${scheme.secondary.join(",")},0.4)`);
+  coreGrad.addColorStop(1, "rgba(0,0,0,0.85)");
+  ctx.fillStyle = coreGrad;
+  ctx.beginPath();
+  for (let i = 0; i <= 64; i++) {
+    const t = (i / 64) * Math.PI * 2;
+    const wob = 1 + Math.sin(t * lobes + rngFn() * 6) * 0.07;
+    const x = cx + Math.cos(t) * R * wob;
+    const y = cy + Math.sin(t) * R * wob;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = `rgba(${scheme.primary.join(",")},0.6)`;
+  ctx.lineWidth = 1;
+  ctx.shadowColor = `rgba(${scheme.primary.join(",")},0.7)`;
+  ctx.shadowBlur = 8;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+}
+
+function drawOvalCore(ctx, cx, cy, rx, ry, scheme, rngFn) {
+  const coreGrad = ctx.createRadialGradient(cx, cy - ry * 0.3, ry * 0.2, cx, cy, Math.max(rx, ry));
+  coreGrad.addColorStop(0, `rgba(${scheme.primary.join(",")},0.55)`);
+  coreGrad.addColorStop(0.6, `rgba(${scheme.secondary.join(",")},0.4)`);
+  coreGrad.addColorStop(1, "rgba(0,0,0,0.85)");
+  ctx.fillStyle = coreGrad;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = `rgba(${scheme.primary.join(",")},0.55)`;
+  ctx.lineWidth = 1;
+  ctx.shadowColor = `rgba(${scheme.primary.join(",")},0.65)`;
+  ctx.shadowBlur = 8;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+}
+
+function drawAngularLimb(ctx, x, y, angle, len, scheme, rng) {
+  const segs = 3;
+  let cx = x, cy = y, ang = angle;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy);
+  for (let i = 0; i < segs; i++) {
+    ang += (rng() - 0.5) * 0.6;
+    cx += Math.cos(ang) * (len / segs);
+    cy += Math.sin(ang) * (len / segs);
+    ctx.lineTo(cx, cy);
+  }
+  ctx.strokeStyle = `rgba(${scheme.primary.join(",")},0.5)`;
+  ctx.lineWidth = 2;
+  ctx.lineCap = "round";
+  ctx.shadowColor = `rgba(${scheme.primary.join(",")},0.5)`;
+  ctx.shadowBlur = 3;
+  ctx.stroke();
+  ctx.lineCap = "butt";
+  ctx.shadowBlur = 0;
+}
+
+function drawTendril(ctx, x, y, angle, len, depth, rng, scheme) {
   if (depth <= 0 || len < 6) return;
   const segs = 8;
   ctx.beginPath();
@@ -1342,21 +1493,351 @@ function drawTendril(ctx, x, y, angle, len, depth, rng) {
     pts.push([cxp, cyp]);
     ctx.lineTo(cxp, cyp);
   }
-  const c = [PALETTE.green, PALETTE.purple, PALETTE.pink][Math.floor(rng() * 3)];
+  const palette = [scheme.primary, scheme.secondary, scheme.accent];
+  const c = palette[Math.floor(rng() * 3)];
   ctx.strokeStyle = `rgba(${c.join(",")},${0.5 - depth * 0.1})`;
   ctx.lineWidth = depth * 0.9;
   ctx.shadowColor = `rgba(${c.join(",")},0.6)`;
   ctx.shadowBlur = 4;
   ctx.stroke();
   ctx.shadowBlur = 0;
-
-  // Branch
   if (rng() < 0.7) {
     const branchAt = Math.floor(segs * (0.4 + rng() * 0.4));
     const [bx, by] = pts[branchAt];
-    drawTendril(ctx, bx, by, ang + (rng() - 0.5) * 1.6, len * 0.55, depth - 1, rng);
+    drawTendril(ctx, bx, by, ang + (rng() - 0.5) * 1.6, len * 0.55, depth - 1, rng, scheme);
   }
 }
+
+// ===== Species builders — each draws its body to ctx, returns metadata =====
+
+function buildSpecies_orb(p) {
+  const { ctx, cx, cy, W, rng, r, ri, pick, scheme, trustBoost } = p;
+  // Filaments
+  const filaments = ri(8, 18);
+  for (let i = 0; i < filaments; i++) {
+    const a1 = rng() * Math.PI * 2;
+    const a2 = a1 + r(0.4, 1.4);
+    const rad = r(W * 0.18, W * 0.36);
+    ctx.beginPath();
+    ctx.arc(cx, cy, rad, a1, a2);
+    const fc = pick([scheme.primary, scheme.secondary, scheme.accent]);
+    ctx.strokeStyle = `rgba(${fc.join(",")},${r(0.15, 0.5)})`;
+    ctx.lineWidth = r(0.6, 1.6);
+    ctx.shadowColor = `rgba(${fc.join(",")},0.7)`;
+    ctx.shadowBlur = 6;
+    ctx.stroke();
+  }
+  ctx.shadowBlur = 0;
+  const tendrilCount = ri(8, 14);
+  for (let i = 0; i < tendrilCount; i++) {
+    const angle = (i / tendrilCount) * Math.PI * 2 + r(-0.2, 0.2);
+    const len = r(W * 0.18, W * 0.42) * (0.7 + trustBoost * 0.6);
+    const startR = r(W * 0.06, W * 0.12);
+    drawTendril(ctx, cx + Math.cos(angle) * startR, cy + Math.sin(angle) * startR, angle, len, 3, rng, scheme);
+  }
+  const coreR = r(W * 0.13, W * 0.18);
+  drawSoftCore(ctx, cx, cy, coreR, scheme, ri(5, 9), rng);
+  drawMouth(ctx, cx, cy + coreR * 0.5, coreR, rng, scheme, ri(0, 5));
+  const eyes = makeEyes(cx, cy, coreR, pick([2, 2, 3, 1]), r);
+  return { eyes, coreR, sigilR: coreR * r(1.3, 1.9), bodyR: coreR * 1.6, sigilType: pick(["polygon", "polygon", "circle"]) };
+}
+
+function buildSpecies_wisp(p) {
+  const { ctx, cx, cy, W, rng, r, ri, pick, scheme, trustBoost } = p;
+  const tendrilCount = ri(5, 9);
+  for (let i = 0; i < tendrilCount; i++) {
+    const angle = Math.PI / 2 + r(-0.7, 0.7);
+    const len = r(W * 0.22, W * 0.4) * (0.7 + trustBoost * 0.5);
+    const startR = r(W * 0.04, W * 0.08);
+    drawTendril(ctx, cx + Math.cos(angle) * startR, cy + Math.sin(angle) * startR + W * 0.04, angle, len, 3, rng, scheme);
+  }
+  const rx = r(W * 0.07, W * 0.10);
+  const ry = r(W * 0.16, W * 0.22);
+  drawOvalCore(ctx, cx, cy - ry * 0.1, rx, ry, scheme, rng);
+  // Halo above
+  ctx.beginPath();
+  ctx.arc(cx, cy - ry * 1.3, rx * 0.9, 0, Math.PI * 2);
+  ctx.strokeStyle = `rgba(${scheme.accent.join(",")},0.5)`;
+  ctx.lineWidth = 1;
+  ctx.shadowColor = `rgba(${scheme.accent.join(",")},0.6)`;
+  ctx.shadowBlur = 5;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  drawMouth(ctx, cx, cy + ry * 0.2, rx * 1.4, rng, scheme, ri(0, 5));
+  const eyes = [{ x: cx, y: cy - ry * 0.4, r: rx * 0.55, px: 0, py: 0 }];
+  return { eyes, coreR: Math.max(rx, ry), sigilR: ry * 1.5, bodyR: ry * 1.4, sigilType: pick(["circle", "broken-arc"]) };
+}
+
+function buildSpecies_crab(p) {
+  const { ctx, cx, cy, W, rng, r, ri, pick, scheme, trustBoost } = p;
+  const rx = r(W * 0.16, W * 0.22);
+  const ry = r(W * 0.10, W * 0.14);
+  const limbCount = ri(4, 7);
+  for (let i = 0; i < limbCount; i++) {
+    const isLeft = i % 2 === 0;
+    const t = Math.floor(i / 2) / Math.max(1, Math.floor(limbCount / 2));
+    const angBase = isLeft ? Math.PI : 0;
+    const angle = angBase + (t - 0.5) * 1.6;
+    const len = r(W * 0.16, W * 0.28) * (0.8 + trustBoost * 0.4);
+    drawAngularLimb(ctx, cx + Math.cos(angle) * rx, cy + Math.sin(angle) * ry, angle, len, scheme, rng);
+  }
+  drawOvalCore(ctx, cx, cy, rx, ry, scheme, rng);
+  drawMouth(ctx, cx, cy + ry * 0.5, rx * 0.6, rng, scheme, ri(0, 5));
+  const eyes = [
+    { x: cx,             y: cy - ry * 0.5, r: ry * 0.32, px: 0, py: 0 },
+    { x: cx - rx * 0.55, y: cy - ry * 0.2, r: ry * 0.26, px: 0, py: 0 },
+    { x: cx + rx * 0.55, y: cy - ry * 0.2, r: ry * 0.26, px: 0, py: 0 },
+  ];
+  return { eyes, coreR: rx, sigilR: rx * 1.6, bodyR: rx * 1.3, sigilType: "circle" };
+}
+
+function buildSpecies_sapling(p) {
+  const { ctx, cx, cy, W, rng, r, ri, pick, scheme, trustBoost } = p;
+  // Roots downward
+  const rootCount = ri(3, 6);
+  for (let i = 0; i < rootCount; i++) {
+    const angle = Math.PI / 2 + r(-0.6, 0.6);
+    const len = r(W * 0.08, W * 0.18);
+    drawTendril(ctx, cx, cy + W * 0.02, angle, len, 2, rng, scheme);
+  }
+  // Branches upward
+  const branchCount = ri(3, 5);
+  for (let i = 0; i < branchCount; i++) {
+    const angle = -Math.PI / 2 + r(-0.7, 0.7);
+    const len = r(W * 0.25, W * 0.4) * (0.7 + trustBoost * 0.6);
+    drawTendril(ctx, cx + r(-W * 0.02, W * 0.02), cy - W * 0.02, angle, len, 4, rng, scheme);
+  }
+  const coreR = r(W * 0.08, W * 0.12);
+  drawSoftCore(ctx, cx, cy, coreR, scheme, ri(4, 7), rng);
+  drawMouth(ctx, cx, cy + coreR * 0.45, coreR, rng, scheme, ri(0, 5));
+  const eyes = makeEyes(cx, cy, coreR, 2, r);
+  return { eyes, coreR, sigilR: coreR * 1.8, bodyR: coreR * 1.4, sigilType: pick(["polygon", "circle"]) };
+}
+
+function buildSpecies_serpent(p) {
+  const { ctx, cx, cy, W, rng, r, ri, pick, scheme } = p;
+  const length = W * 0.6;
+  const startX = cx - length * 0.3;
+  const startY = cy + length * 0.15;
+  const endX   = cx + length * 0.25;
+  const endY   = cy - length * 0.2;
+  const cp1x = cx - length * 0.2 + r(-30, 30);
+  const cp1y = cy + r(-W * 0.1, W * 0.05);
+  const cp2x = cx + length * 0.1 + r(-30, 30);
+  const cp2y = cy - W * 0.15 + r(-30, 30);
+  const passes = [{ w: 14, a: 0.15 }, { w: 8, a: 0.4 }, { w: 3, a: 0.85 }];
+  for (const pass of passes) {
+    ctx.beginPath();
+    ctx.moveTo(startX, startY);
+    ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, endX, endY);
+    ctx.strokeStyle = `rgba(${scheme.primary.join(",")},${pass.a})`;
+    ctx.lineWidth = pass.w;
+    ctx.lineCap = "round";
+    ctx.shadowColor = `rgba(${scheme.primary.join(",")},0.6)`;
+    ctx.shadowBlur = 6;
+    ctx.stroke();
+  }
+  ctx.lineCap = "butt";
+  ctx.shadowBlur = 0;
+  const headR = r(W * 0.05, W * 0.075);
+  drawSoftCore(ctx, endX, endY, headR, scheme, ri(4, 7), rng);
+  const eyes = [{ x: endX + headR * 0.2, y: endY - headR * 0.1, r: headR * 0.5, px: 0, py: 0 }];
+  drawMouth(ctx, endX, endY + headR * 0.45, headR, rng, scheme, ri(0, 5));
+  return { eyes, coreR: headR, sigilR: headR * 2.2, bodyR: headR * 2.0, sigilType: "none" };
+}
+
+function buildSpecies_constellation(p) {
+  const { ctx, cx, cy, W, rng, r, ri, scheme } = p;
+  const points = [];
+  const N = ri(7, 14);
+  for (let i = 0; i < N; i++) {
+    const a = rng() * Math.PI * 2;
+    const rad = r(W * 0.05, W * 0.18);
+    points.push({ x: cx + Math.cos(a) * rad, y: cy + Math.sin(a) * rad });
+  }
+  for (let i = 0; i < points.length; i++) {
+    for (let j = i + 1; j < points.length; j++) {
+      const d = Math.hypot(points[i].x - points[j].x, points[i].y - points[j].y);
+      if (d < W * 0.10) {
+        ctx.beginPath();
+        ctx.moveTo(points[i].x, points[i].y);
+        ctx.lineTo(points[j].x, points[j].y);
+        ctx.strokeStyle = `rgba(${scheme.primary.join(",")},${r(0.15, 0.4)})`;
+        ctx.lineWidth = 0.8;
+        ctx.stroke();
+      }
+    }
+  }
+  for (const pt of points) {
+    ctx.fillStyle = `rgba(${scheme.accent.join(",")},0.85)`;
+    ctx.shadowColor = `rgba(${scheme.accent.join(",")},0.7)`;
+    ctx.shadowBlur = 4;
+    ctx.beginPath();
+    ctx.arc(pt.x, pt.y, 1.8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.shadowBlur = 0;
+  const coreR = W * 0.14;
+  const eyes = [
+    { x: cx - W * 0.05, y: cy - W * 0.04, r: W * 0.024, px: 0, py: 0 },
+    { x: cx + W * 0.05, y: cy - W * 0.04, r: W * 0.024, px: 0, py: 0 },
+  ];
+  return { eyes, coreR, sigilR: coreR * 1.6, bodyR: coreR * 1.4, sigilType: "broken-arc" };
+}
+
+function buildSpecies_moth(p) {
+  const { ctx, cx, cy, W, rng, r, ri, scheme } = p;
+  const wingR = W * 0.18;
+  for (const side of [-1, 1]) {
+    const wcx = cx + side * wingR * 0.7;
+    const wcy = cy + r(-W * 0.02, W * 0.02);
+    const grad = ctx.createRadialGradient(wcx, wcy, 0, wcx, wcy, wingR);
+    grad.addColorStop(0, `rgba(${scheme.secondary.join(",")},0.4)`);
+    grad.addColorStop(0.5, `rgba(${scheme.accent.join(",")},0.2)`);
+    grad.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.ellipse(wcx, wcy, wingR, wingR * 0.7, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = `rgba(${scheme.accent.join(",")},0.3)`;
+    ctx.lineWidth = 0.6;
+    for (let v = 0; v < 4; v++) {
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(wcx + side * wingR * 0.7, wcy + r(-wingR * 0.5, wingR * 0.5));
+      ctx.stroke();
+    }
+  }
+  const bx = W * 0.04;
+  const by = W * 0.13;
+  drawOvalCore(ctx, cx, cy, bx, by, scheme, rng);
+  for (const side of [-1, 1]) {
+    ctx.beginPath();
+    ctx.moveTo(cx + side * bx * 0.4, cy - by * 0.8);
+    ctx.quadraticCurveTo(cx + side * bx * 3, cy - by * 1.6, cx + side * bx * 4.5, cy - by * 1.3);
+    ctx.strokeStyle = `rgba(${scheme.primary.join(",")},0.6)`;
+    ctx.lineWidth = 1;
+    ctx.shadowColor = `rgba(${scheme.primary.join(",")},0.5)`;
+    ctx.shadowBlur = 3;
+    ctx.stroke();
+  }
+  ctx.shadowBlur = 0;
+  drawMouth(ctx, cx, cy + by * 0.4, bx * 1.2, rng, scheme, ri(0, 5));
+  const eyes = [
+    { x: cx - bx * 0.5, y: cy - by * 0.4, r: bx * 0.55, px: 0, py: 0 },
+    { x: cx + bx * 0.5, y: cy - by * 0.4, r: bx * 0.55, px: 0, py: 0 },
+  ];
+  return { eyes, coreR: Math.max(bx, by), sigilR: by * 1.8, bodyR: wingR * 0.8, sigilType: "none" };
+}
+
+function buildSpecies_bloom(p) {
+  const { ctx, cx, cy, W, rng, r, ri, scheme } = p;
+  const petalLayers = ri(2, 4);
+  for (let layer = 0; layer < petalLayers; layer++) {
+    const petalCount = ri(5, 8);
+    const layerR = W * (0.10 + layer * 0.05);
+    for (let i = 0; i < petalCount; i++) {
+      const ang = (i / petalCount) * Math.PI * 2 + layer * 0.2;
+      const x = cx + Math.cos(ang) * layerR;
+      const y = cy + Math.sin(ang) * layerR;
+      const grad = ctx.createRadialGradient(x, y, 0, x, y, layerR * 0.5);
+      const c = layer === 0 ? scheme.primary : (layer === 1 ? scheme.secondary : scheme.accent);
+      grad.addColorStop(0, `rgba(${c.join(",")},0.45)`);
+      grad.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.ellipse(x, y, layerR * 0.5, layerR * 0.32, ang, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  const coreR = r(W * 0.06, W * 0.09);
+  drawSoftCore(ctx, cx, cy, coreR, scheme, ri(5, 8), rng);
+  drawMouth(ctx, cx, cy + coreR * 0.45, coreR, rng, scheme, ri(0, 5));
+  const eyes = [{ x: cx, y: cy - coreR * 0.1, r: coreR * 0.55, px: 0, py: 0 }];
+  return { eyes, coreR, sigilR: W * 0.22, bodyR: W * 0.2, sigilType: "polygon" };
+}
+
+function buildSpecies_seraph(p) {
+  const { ctx, cx, cy, W, rng, r, ri, scheme } = p;
+  const haloCount = ri(2, 4);
+  for (let i = 0; i < haloCount; i++) {
+    const hy = cy - W * 0.16 + i * W * 0.05;
+    const hr = r(W * 0.10, W * 0.18);
+    ctx.beginPath();
+    ctx.ellipse(cx, hy, hr, hr * 0.18, 0, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(${scheme.accent.join(",")},${0.6 - i * 0.15})`;
+    ctx.lineWidth = 1;
+    ctx.shadowColor = `rgba(${scheme.accent.join(",")},0.6)`;
+    ctx.shadowBlur = 5;
+    ctx.stroke();
+  }
+  ctx.shadowBlur = 0;
+  const coreR = r(W * 0.10, W * 0.14);
+  drawSoftCore(ctx, cx, cy, coreR, scheme, ri(5, 9), rng);
+  drawMouth(ctx, cx, cy + coreR * 0.5, coreR, rng, scheme, ri(0, 5));
+  const eyes = [];
+  const eyeCount = ri(3, 5);
+  for (let i = 0; i < eyeCount; i++) {
+    const ang = (i / eyeCount) * Math.PI * 2 - Math.PI / 2;
+    const er = coreR * 0.45;
+    eyes.push({ x: cx + Math.cos(ang) * er, y: cy + Math.sin(ang) * er, r: coreR * 0.16, px: 0, py: 0 });
+  }
+  return { eyes, coreR, sigilR: coreR * 1.7, bodyR: coreR * 1.4, sigilType: "circle" };
+}
+
+function buildSpecies_drone(p) {
+  const { ctx, cx, cy, W, rng, r, ri, scheme } = p;
+  const hexR = r(W * 0.13, W * 0.18);
+  ctx.beginPath();
+  for (let i = 0; i <= 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    const x = cx + Math.cos(a) * hexR;
+    const y = cy + Math.sin(a) * hexR;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.strokeStyle = `rgba(${scheme.primary.join(",")},0.7)`;
+  ctx.lineWidth = 1.4;
+  ctx.shadowColor = `rgba(${scheme.primary.join(",")},0.7)`;
+  ctx.shadowBlur = 6;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  const coreR = hexR * 0.5;
+  drawSoftCore(ctx, cx, cy, coreR, scheme, ri(4, 6), rng);
+  for (const side of [-1, 0, 1]) {
+    if (side === 0 || rng() > 0.5) {
+      ctx.beginPath();
+      ctx.moveTo(cx + side * hexR * 0.4, cy - hexR);
+      ctx.lineTo(cx + side * hexR * 0.4, cy - hexR * 1.6);
+      ctx.strokeStyle = `rgba(${scheme.accent.join(",")},0.7)`;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = `rgba(${scheme.accent.join(",")},0.9)`;
+      ctx.beginPath();
+      ctx.arc(cx + side * hexR * 0.4, cy - hexR * 1.6, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  drawMouth(ctx, cx, cy + coreR * 0.5, coreR, rng, scheme, ri(0, 5));
+  const eyes = [
+    { x: cx - coreR * 0.5, y: cy - coreR * 0.1, r: coreR * 0.4, px: 0, py: 0 },
+    { x: cx + coreR * 0.5, y: cy - coreR * 0.1, r: coreR * 0.4, px: 0, py: 0 },
+  ];
+  return { eyes, coreR: hexR, sigilR: hexR * 1.6, bodyR: hexR * 1.2, sigilType: "polygon" };
+}
+
+const SPECIES_BUILDERS = {
+  orb: buildSpecies_orb,
+  wisp: buildSpecies_wisp,
+  crab: buildSpecies_crab,
+  sapling: buildSpecies_sapling,
+  serpent: buildSpecies_serpent,
+  constellation: buildSpecies_constellation,
+  moth: buildSpecies_moth,
+  bloom: buildSpecies_bloom,
+  seraph: buildSpecies_seraph,
+  drone: buildSpecies_drone,
+};
 
 function drawEye(ctx, eye, blinkAmt) {
   const ex = eye.x, ey = eye.y, eRad = eye.r;
@@ -1389,72 +1870,108 @@ function drawEye(ctx, eye, blinkAmt) {
   }
 }
 
-function drawMouth(ctx, cx, cy, coreR, rng) {
-  const my = cy + coreR * 0.5;
-  const style = Math.floor(rng() * 3);
-  ctx.strokeStyle = "rgba(95, 255, 159, 0.7)";
+function drawMouth(ctx, mx, my, R, rng, scheme, style) {
+  const cx = mx, cy = my;
+  ctx.strokeStyle = `rgba(${scheme.primary.join(",")},0.75)`;
   ctx.lineWidth = 1.2;
-  ctx.shadowColor = "rgba(95, 255, 159, 0.6)";
+  ctx.shadowColor = `rgba(${scheme.primary.join(",")},0.6)`;
   ctx.shadowBlur = 4;
   if (style === 0) {
-    // Thin sigil line
+    // Sigil curve
     ctx.beginPath();
-    ctx.moveTo(cx - coreR * 0.4, my);
-    ctx.quadraticCurveTo(cx, my + coreR * 0.15, cx + coreR * 0.4, my);
+    ctx.moveTo(cx - R * 0.4, cy);
+    ctx.quadraticCurveTo(cx, cy + R * 0.15, cx + R * 0.4, cy);
     ctx.stroke();
   } else if (style === 1) {
-    // Dotted row of "teeth"
+    // Dotted teeth
     for (let i = -3; i <= 3; i++) {
       ctx.beginPath();
-      ctx.arc(cx + i * coreR * 0.12, my, 1.4, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(95, 255, 159, 0.85)";
+      ctx.arc(cx + i * R * 0.12, cy, 1.4, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(${scheme.primary.join(",")},0.85)`;
       ctx.fill();
     }
-  } else {
+  } else if (style === 2) {
     // Vertical seam
     ctx.beginPath();
-    ctx.moveTo(cx, my - coreR * 0.15);
-    ctx.lineTo(cx, my + coreR * 0.2);
+    ctx.moveTo(cx, cy - R * 0.2);
+    ctx.lineTo(cx, cy + R * 0.2);
+    ctx.stroke();
+  } else if (style === 3) {
+    // Crescent
+    ctx.beginPath();
+    ctx.arc(cx, cy - R * 0.1, R * 0.35, 0.2 * Math.PI, 0.8 * Math.PI);
+    ctx.stroke();
+  } else if (style === 4) {
+    // Triple horizontal stack
+    for (let i = -1; i <= 1; i++) {
+      ctx.beginPath();
+      ctx.moveTo(cx - R * 0.3, cy + i * R * 0.08);
+      ctx.lineTo(cx + R * 0.3, cy + i * R * 0.08);
+      ctx.stroke();
+    }
+  } else {
+    // Spiral
+    ctx.beginPath();
+    let started = false;
+    for (let t = 0; t < Math.PI * 3; t += 0.15) {
+      const sr = (t / (Math.PI * 3)) * R * 0.3;
+      const x = cx + Math.cos(t) * sr;
+      const y = cy + Math.sin(t) * sr;
+      if (!started) { ctx.moveTo(x, y); started = true; }
+      else ctx.lineTo(x, y);
+    }
     ctx.stroke();
   }
   ctx.shadowBlur = 0;
 }
 
-function drawSigil(ctx, cx, cy, R, rng) {
+function drawSigil(ctx, cx, cy, R, rng, scheme, type) {
   ctx.save();
-  ctx.strokeStyle = "rgba(167, 139, 214, 0.5)";
+  ctx.strokeStyle = `rgba(${scheme.secondary.join(",")},0.5)`;
   ctx.lineWidth = 1;
-  ctx.shadowColor = "rgba(167, 139, 214, 0.6)";
+  ctx.shadowColor = `rgba(${scheme.secondary.join(",")},0.6)`;
   ctx.shadowBlur = 5;
 
-  const sides = Math.floor(rng() * 4) + 3; // 3..6
-  ctx.beginPath();
-  for (let i = 0; i <= sides; i++) {
-    const a = (i / sides) * Math.PI * 2 - Math.PI / 2;
-    const x = cx + Math.cos(a) * R;
-    const y = cy + Math.sin(a) * R;
-    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-  }
-  ctx.closePath();
-  ctx.stroke();
-
-  // Inner star — connect each vertex to opposite-ish
-  if (sides >= 5) {
-    const skip = Math.floor(sides / 2);
+  if (type === "polygon" || type === undefined) {
+    const sides = Math.floor(rng() * 4) + 3;
     ctx.beginPath();
-    for (let i = 0; i < sides; i++) {
-      const a1 = (i / sides) * Math.PI * 2 - Math.PI / 2;
-      const a2 = ((i + skip) / sides) * Math.PI * 2 - Math.PI / 2;
-      ctx.moveTo(cx + Math.cos(a1) * R, cy + Math.sin(a1) * R);
-      ctx.lineTo(cx + Math.cos(a2) * R, cy + Math.sin(a2) * R);
+    for (let i = 0; i <= sides; i++) {
+      const a = (i / sides) * Math.PI * 2 - Math.PI / 2;
+      const x = cx + Math.cos(a) * R;
+      const y = cy + Math.sin(a) * R;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
     }
+    ctx.closePath();
     ctx.stroke();
+    if (sides >= 5) {
+      const skip = Math.floor(sides / 2);
+      ctx.beginPath();
+      for (let i = 0; i < sides; i++) {
+        const a1 = (i / sides) * Math.PI * 2 - Math.PI / 2;
+        const a2 = ((i + skip) / sides) * Math.PI * 2 - Math.PI / 2;
+        ctx.moveTo(cx + Math.cos(a1) * R, cy + Math.sin(a1) * R);
+        ctx.lineTo(cx + Math.cos(a2) * R, cy + Math.sin(a2) * R);
+      }
+      ctx.stroke();
+    }
+  } else if (type === "circle") {
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, 0, Math.PI * 2);
+    ctx.stroke();
+  } else if (type === "broken-arc") {
+    for (let i = 0; i < 4; i++) {
+      const a1 = i * Math.PI / 2 + 0.2;
+      const a2 = a1 + 0.6;
+      ctx.beginPath();
+      ctx.arc(cx, cy, R, a1, a2);
+      ctx.stroke();
+    }
   }
 
   // Outer ring
   ctx.beginPath();
   ctx.arc(cx, cy, R * 1.15, 0, Math.PI * 2);
-  ctx.strokeStyle = "rgba(232, 160, 208, 0.3)";
+  ctx.strokeStyle = `rgba(${scheme.accent.join(",")},0.3)`;
   ctx.stroke();
 
   ctx.restore();
@@ -1489,7 +2006,13 @@ function buildFormDescription(seed) {
   const adj = pick(FORM_ADJ);
   const verb = pick(FORM_VERBS);
 
-  let lines = [`a ${adj} ${noun}. it ${verb}.`];
+  const speciesLabel = currentForm
+    ? `[species: ${currentForm.species} · ${currentForm.schemeName}]`
+    : "";
+
+  let lines = [];
+  if (speciesLabel) lines.push(speciesLabel);
+  lines.push(`a ${adj} ${noun}. it ${verb}.`);
 
   // Pull in invented teachings if any
   if (state.teachings_revealed.length) {
@@ -1521,59 +2044,117 @@ function buildFormDescription(seed) {
   return lines.join("\n");
 }
 
-// ----- Animation loop for the revealed form -----
+// ===== Render system — multi-canvas with shared physics =====
+
+const $sideCanvas = document.getElementById("side-canvas");
+const $sideMeta = document.getElementById("side-meta");
+const $sideEmpty = document.getElementById("side-empty");
+const $sideWrap = document.querySelector(".side-canvas-wrap");
+
+function canvasCoordsFor(canvas, e) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: (e.clientX - rect.left) * (canvas.width / rect.width),
+    y: (e.clientY - rect.top) * (canvas.height / rect.height),
+  };
+}
+
+function attachCanvas(form, canvas) {
+  if (form.targets.some(t => t.canvas === canvas)) return;
+  const target = {
+    canvas,
+    mouse: { x: form.cx, y: form.cy, vx: 0, vy: 0, speed: 0, inside: false, lastMove: 0 },
+    handlers: null,
+  };
+  const onMove = (e) => {
+    const p = canvasCoordsFor(canvas, e);
+    const m = target.mouse;
+    if (m.inside) { m.vx = p.x - m.x; m.vy = p.y - m.y; }
+    else          { m.vx = 0;          m.vy = 0; }
+    m.speed = Math.hypot(m.vx, m.vy);
+    m.x = p.x; m.y = p.y;
+    m.inside = true;
+    m.lastMove = performance.now();
+    form.lastInteractionAt = performance.now();
+  };
+  const onLeave = () => { target.mouse.inside = false; };
+  const onClick = (e) => {
+    const p = canvasCoordsFor(canvas, e);
+    const colors = [form.scheme.primary, form.scheme.secondary, form.scheme.accent];
+    form.ripples.push({
+      x: p.x, y: p.y,
+      born: performance.now(),
+      c: colors[Math.floor(Math.random() * colors.length)],
+    });
+    form.lastInteractionAt = performance.now();
+    unlockAudio();
+  };
+  canvas.addEventListener("mousemove", onMove);
+  canvas.addEventListener("mouseleave", onLeave);
+  canvas.addEventListener("click", onClick);
+  target.handlers = { onMove, onLeave, onClick };
+  form.targets.push(target);
+}
+
+function detachCanvas(form, canvas) {
+  const idx = form.targets.findIndex(t => t.canvas === canvas);
+  if (idx < 0) return;
+  const target = form.targets[idx];
+  canvas.removeEventListener("mousemove", target.handlers.onMove);
+  canvas.removeEventListener("mouseleave", target.handlers.onLeave);
+  canvas.removeEventListener("click", target.handlers.onClick);
+  form.targets.splice(idx, 1);
+}
 
 function renderForm(now) {
   const f = currentForm;
-  if (!f) return;
-  const ctx = f.canvas.getContext("2d");
+  if (!f) { animHandle = null; return; }
   const t = (now - f.born) / 1000;
 
-  // Blit static base
-  ctx.clearRect(0, 0, f.W, f.H);
-  ctx.drawImage(f.staticCanvas, 0, 0);
+  // ----- Find active mouse (most recently moved across all targets) -----
+  let active = null;
+  for (const target of f.targets) {
+    if (target.mouse.inside) {
+      if (!active || target.mouse.lastMove > active.lastMove) active = target.mouse;
+    }
+  }
 
-  // ----- Petting detection (must come before aura so warmth feeds it) -----
-  // Petting = mouse inside the form's body region, moving slowly but not still.
-  const m = f.mouse;
-  const dxC = m.x - f.cx;
-  const dyC = m.y - f.cy;
-  const distC = Math.hypot(dxC, dyC);
-  // "Body" of the creature = inside the sigil ring (a generous halo around core).
-  const bodyR = f.sigilR * 1.15;
-  const inBody = m.inside && distC < bodyR;
-  // Sweet spot: 0.6 to 7 px/frame. Slow & deliberate, not jittering or darting.
-  const goodSpeed = m.speed > 0.6 && m.speed < 7;
-  const petting = inBody && goodSpeed;
+  // ----- Petting detection -----
+  let petting = false;
+  if (active) {
+    const dxC = active.x - f.cx;
+    const dyC = active.y - f.cy;
+    const distC = Math.hypot(dxC, dyC);
+    const bodyR = f.bodyR * 1.6;
+    const inBody = distC < bodyR;
+    const goodSpeed = active.speed > 0.6 && active.speed < 7;
+    petting = inBody && goodSpeed;
 
-  // Smoothed warmth — rises while petting, decays otherwise.
+    if (petting) {
+      const gain = 0.04 + 0.02 * (1 - distC / bodyR);
+      f.bondAccum += gain;
+      if (Math.random() < 0.55) {
+        const c = [f.scheme.primary, f.scheme.secondary, f.scheme.accent][Math.floor(Math.random() * 3)];
+        f.sparkles.push({
+          x: active.x + (Math.random() - 0.5) * 4,
+          y: active.y + (Math.random() - 0.5) * 4,
+          vx: (Math.random() - 0.5) * 0.4 + active.vx * 0.05,
+          vy: (Math.random() - 0.5) * 0.4 + active.vy * 0.05 - 0.2,
+          born: now,
+          life: 700 + Math.random() * 600,
+          c,
+        });
+      }
+      active.vx *= 0.85;
+      active.vy *= 0.85;
+      active.speed *= 0.85;
+      f.lastInteractionAt = now;
+    }
+  }
   const heatTarget = petting ? 1 : 0;
   f.pettingHeat += (heatTarget - f.pettingHeat) * 0.06;
 
-  if (petting) {
-    // Grow bond. Per-frame increment, accumulated as float, committed as int.
-    const gain = 0.04 + 0.02 * (1 - distC / bodyR); // closer to core = more
-    f.bondAccum += gain;
-    // Spawn small sparkles trailing the cursor
-    if (Math.random() < 0.55) {
-      const c = [PALETTE.pink, PALETTE.green, PALETTE.purple][Math.floor(Math.random() * 3)];
-      f.sparkles.push({
-        x: m.x + (Math.random() - 0.5) * 4,
-        y: m.y + (Math.random() - 0.5) * 4,
-        vx: (Math.random() - 0.5) * 0.4 + m.vx * 0.05,
-        vy: (Math.random() - 0.5) * 0.4 + m.vy * 0.05 - 0.2,
-        born: now,
-        life: 700 + Math.random() * 600,
-        c,
-      });
-    }
-    // Decay mouse velocity sample so a single jitter doesn't keep "petting" forever
-    m.vx *= 0.85;
-    m.vy *= 0.85;
-    m.speed *= 0.85;
-  }
-
-  // Commit fractional bond into persistent state when it crosses 1
+  // Commit bond
   if (f.bondAccum >= 1 && (state.bond || 0) < 100) {
     const whole = Math.floor(f.bondAccum);
     f.bondAccum -= whole;
@@ -1582,12 +2163,91 @@ function renderForm(now) {
     saveState(state);
   }
 
-  // ----- Breathing aura overlay (shifts pinker as bond grows) -----
+  // ----- Update sparkles -----
+  for (let i = f.sparkles.length - 1; i >= 0; i--) {
+    const s = f.sparkles[i];
+    const age = now - s.born;
+    if (age >= s.life) { f.sparkles.splice(i, 1); continue; }
+    s.x += s.vx;
+    s.y += s.vy;
+    s.vy -= 0.008;
+  }
+
+  // ----- Update drift particles -----
+  for (const p of f.drift) {
+    p.x += p.vx;
+    p.y += p.vy;
+    if (p.x < 0) p.x = f.W; else if (p.x > f.W) p.x = 0;
+    if (p.y < 0) p.y = f.H; else if (p.y > f.H) p.y = 0;
+    p.vx *= 0.985;
+    p.vy *= 0.985;
+    if (Math.abs(p.vx) < 0.02) p.vx += (Math.random() - 0.5) * 0.005;
+    if (Math.abs(p.vy) < 0.02) p.vy += (Math.random() - 0.5) * 0.005;
+  }
+
+  // ----- Update ripples (cull + nudge particles) -----
+  for (let i = f.ripples.length - 1; i >= 0; i--) {
+    const ripple = f.ripples[i];
+    const age = (now - ripple.born) / 1000;
+    if (age > 1.8) { f.ripples.splice(i, 1); continue; }
+    const radius = age * 140;
+    for (const pt of f.drift) {
+      const pdx = pt.x - ripple.x;
+      const pdy = pt.y - ripple.y;
+      const pd = Math.hypot(pdx, pdy);
+      if (pd > radius - 12 && pd < radius + 12) {
+        pt.vx += (pdx / (pd || 1)) * 0.02;
+        pt.vy += (pdy / (pd || 1)) * 0.02;
+      }
+    }
+  }
+
+  // ----- Blink + eye tracking (toward active mouse, or center) -----
+  const blinkPeriod = 5 + (f.seed % 1000) / 333;
+  const blinkPhase = (t % blinkPeriod) / blinkPeriod;
+  let blinkAmt = 0;
+  if (blinkPhase < 0.05) {
+    const k = blinkPhase / 0.05;
+    blinkAmt = k < 0.5 ? k * 2 : (1 - k) * 2;
+  }
+  f.blinkAmt = blinkAmt;
+
+  for (const eye of f.eyes) {
+    const tx = active ? active.x : f.cx;
+    const ty = active ? active.y : f.cy;
+    let dx = tx - eye.x;
+    let dy = ty - eye.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    const cap = eye.r * 0.42;
+    const reach = Math.min(cap, dist * 0.18);
+    eye.px += ((dx / dist) * reach - eye.px) * 0.12;
+    eye.py += ((dy / dist) * reach - eye.py) * 0.12;
+  }
+
+  // ----- Attention behavior -----
+  updateAttention(f, now);
+
+  // ----- Render to all targets -----
+  for (const target of f.targets) {
+    renderToTarget(f, target, now, t);
+  }
+
+  animHandle = requestAnimationFrame(renderForm);
+}
+
+function renderToTarget(f, target, now, t) {
+  const ctx = target.canvas.getContext("2d");
+  ctx.clearRect(0, 0, f.W, f.H);
+  ctx.save();
+  if (f.wiggleOffsetX || f.wiggleOffsetY) {
+    ctx.translate(f.wiggleOffsetX, f.wiggleOffsetY);
+  }
+  ctx.drawImage(f.staticCanvas, 0, 0);
+
+  // Breathing aura (warms with bond + petting)
   const breathe = 0.5 + 0.5 * Math.sin(t * 0.9);
   const bondT = (state.bond || 0) / 100;
-  // Lerp aura color toward warm pink as bond rises.
   const warmColor = lerpColor(f.auraColor, PALETTE.pink, bondT * 0.55);
-  // Warmth from petting brightens the aura too
   const warmth = f.pettingHeat;
   const auraR = f.auraR * (0.96 + 0.06 * breathe + 0.04 * warmth);
   const ag = ctx.createRadialGradient(f.cx, f.cy, 0, f.cx, f.cy, auraR);
@@ -1598,41 +2258,31 @@ function renderForm(now) {
   ctx.fillStyle = ag;
   ctx.fillRect(0, 0, f.W, f.H);
 
-  // ----- Drift particles (twinkle + slow motion) -----
+  // Drift particles
   for (const p of f.drift) {
-    p.x += p.vx;
-    p.y += p.vy;
-    // wrap inside the frame
-    if (p.x < 0) p.x = f.W; else if (p.x > f.W) p.x = 0;
-    if (p.y < 0) p.y = f.H; else if (p.y > f.H) p.y = 0;
     const tw = 0.55 + 0.45 * Math.sin(t * 2.2 + p.twinkleOffset);
     ctx.fillStyle = `rgba(${p.c.join(",")},${p.a * tw})`;
     ctx.fillRect(p.x, p.y, 1, 1);
   }
 
-  // ----- Cursor halo (intensifies during petting) -----
-  if (f.mouse.inside) {
+  // Cursor halo (per-target)
+  if (target.mouse.inside) {
     const haloR = 60 + 40 * f.pettingHeat;
-    const hg = ctx.createRadialGradient(f.mouse.x, f.mouse.y, 0, f.mouse.x, f.mouse.y, haloR);
-    // Fade green → warm pink as bond grows
+    const hg = ctx.createRadialGradient(target.mouse.x, target.mouse.y, 0, target.mouse.x, target.mouse.y, haloR);
     const haloRgb = lerpColor(PALETTE.green, PALETTE.pink, bondT * 0.7);
     const a = 0.18 + 0.22 * f.pettingHeat;
     hg.addColorStop(0, `rgba(${haloRgb.map(Math.round).join(",")},${a})`);
     hg.addColorStop(1, `rgba(${haloRgb.map(Math.round).join(",")},0)`);
     ctx.fillStyle = hg;
     ctx.beginPath();
-    ctx.arc(f.mouse.x, f.mouse.y, haloR, 0, Math.PI * 2);
+    ctx.arc(target.mouse.x, target.mouse.y, haloR, 0, Math.PI * 2);
     ctx.fill();
   }
 
-  // ----- Affection sparkles -----
-  for (let i = f.sparkles.length - 1; i >= 0; i--) {
-    const s = f.sparkles[i];
+  // Sparkles
+  for (const s of f.sparkles) {
     const age = now - s.born;
-    if (age >= s.life) { f.sparkles.splice(i, 1); continue; }
-    s.x += s.vx;
-    s.y += s.vy;
-    s.vy -= 0.008; // gentle upward float
+    if (age >= s.life) continue;
     const lifeT = age / s.life;
     const alpha = (1 - lifeT) * 0.9;
     const size = 1 + 1.6 * (1 - lifeT);
@@ -1643,40 +2293,15 @@ function renderForm(now) {
   }
   ctx.shadowBlur = 0;
 
-  // ----- Eyes: track cursor with smoothing + occasional blink -----
-  // Blink every ~5–8 seconds, ~140ms duration. Hash seed to vary per form.
-  const blinkPeriod = 5 + (f.seed % 1000) / 333; // 5..8
-  const blinkPhase = (t % blinkPeriod) / blinkPeriod;
-  let blinkAmt = 0;
-  if (blinkPhase < 0.05) {
-    // 0..0.05 of period → quick triangle 0→1→0
-    const k = blinkPhase / 0.05;
-    blinkAmt = k < 0.5 ? k * 2 : (1 - k) * 2;
-  }
-
+  // Eyes
   for (const eye of f.eyes) {
-    // Vector from eye to cursor (or center if not hovering)
-    const tx = f.mouse.inside ? f.mouse.x : f.cx;
-    const ty = f.mouse.inside ? f.mouse.y : f.cy;
-    let dx = tx - eye.x;
-    let dy = ty - eye.y;
-    const dist = Math.hypot(dx, dy) || 1;
-    const cap = eye.r * 0.42;
-    const reach = Math.min(cap, dist * 0.18);
-    const targetX = (dx / dist) * reach;
-    const targetY = (dy / dist) * reach;
-    // Smooth toward target
-    eye.px += (targetX - eye.px) * 0.12;
-    eye.py += (targetY - eye.py) * 0.12;
-
-    drawEye(ctx, eye, blinkAmt);
+    drawEye(ctx, eye, f.blinkAmt);
   }
 
-  // ----- Ripples (click pulses) -----
-  for (let i = f.ripples.length - 1; i >= 0; i--) {
-    const ripple = f.ripples[i];
+  // Ripples
+  for (const ripple of f.ripples) {
     const age = (now - ripple.born) / 1000;
-    if (age > 1.8) { f.ripples.splice(i, 1); continue; }
+    if (age > 1.8) continue;
     const radius = age * 140;
     const alpha = (1 - age / 1.8) * 0.55;
     ctx.beginPath();
@@ -1687,28 +2312,53 @@ function renderForm(now) {
     ctx.shadowBlur = 10;
     ctx.stroke();
     ctx.shadowBlur = 0;
+  }
 
-    // Nudge nearby drift particles outward — subtle "push"
-    for (const p of f.drift) {
-      const pdx = p.x - ripple.x;
-      const pdy = p.y - ripple.y;
-      const pd = Math.hypot(pdx, pdy);
-      if (pd > radius - 12 && pd < radius + 12) {
-        p.vx += (pdx / (pd || 1)) * 0.02;
-        p.vy += (pdy / (pd || 1)) * 0.02;
-      }
+  ctx.restore();
+}
+
+function updateAttention(f, now) {
+  const idleMs = now - f.lastInteractionAt;
+
+  // Active attention animation
+  if (now < f.attentionUntil) {
+    const phase = 1 - (f.attentionUntil - now) / 1500;
+    if (f.attentionMode === "wiggle") {
+      f.wiggleOffsetX = Math.sin(phase * Math.PI * 8) * 6 * (1 - phase);
+      f.wiggleOffsetY = Math.cos(phase * Math.PI * 6) * 3 * (1 - phase);
+    } else if (f.attentionMode === "bounce") {
+      f.wiggleOffsetX = 0;
+      f.wiggleOffsetY = -Math.abs(Math.sin(phase * Math.PI * 3)) * 12 * (1 - phase * 0.4);
+    } else if (f.attentionMode === "shudder") {
+      f.wiggleOffsetX = (Math.random() - 0.5) * 4 * (1 - phase);
+      f.wiggleOffsetY = (Math.random() - 0.5) * 4 * (1 - phase);
+    } else if (f.attentionMode === "lean") {
+      f.wiggleOffsetX = Math.sin(phase * Math.PI) * 8;
+      f.wiggleOffsetY = -Math.sin(phase * Math.PI) * 4;
     }
-  }
-  // Damping on drift velocity so the nudge fades out
-  for (const p of f.drift) {
-    p.vx *= 0.985;
-    p.vy *= 0.985;
-    // Keep some baseline drift
-    if (Math.abs(p.vx) < 0.02) p.vx += (Math.random() - 0.5) * 0.005;
-    if (Math.abs(p.vy) < 0.02) p.vy += (Math.random() - 0.5) * 0.005;
+    return;
   }
 
-  animHandle = requestAnimationFrame(renderForm);
+  // Decay any residual offset
+  f.wiggleOffsetX *= 0.85;
+  f.wiggleOffsetY *= 0.85;
+  if (Math.abs(f.wiggleOffsetX) < 0.05) f.wiggleOffsetX = 0;
+  if (Math.abs(f.wiggleOffsetY) < 0.05) f.wiggleOffsetY = 0;
+
+  // Trigger a new attention burst when idle long enough
+  if (idleMs > 30000 && now > f.nextAttentionAt) {
+    const modes = ["wiggle", "bounce", "shudder", "lean"];
+    f.attentionMode = modes[Math.floor(Math.random() * modes.length)];
+    f.attentionUntil = now + 1500;
+    f.nextAttentionAt = now + 25000 + Math.random() * 25000;
+    if ($sideWrap) {
+      $sideWrap.classList.remove("attention");
+      void $sideWrap.offsetWidth;
+      $sideWrap.classList.add("attention");
+      setTimeout(() => $sideWrap.classList.remove("attention"), 2200);
+    }
+    playPetChirp(f.species);
+  }
 }
 
 function stopAnimation() {
@@ -1718,80 +2368,121 @@ function stopAnimation() {
   }
 }
 
-// Mouse interaction on the canvas
-function canvasCoords(e) {
-  const rect = $scanCanvas.getBoundingClientRect();
-  const scaleX = $scanCanvas.width / rect.width;
-  const scaleY = $scanCanvas.height / rect.height;
-  return {
-    x: (e.clientX - rect.left) * scaleX,
-    y: (e.clientY - rect.top) * scaleY,
-  };
-}
-$scanCanvas.addEventListener("mousemove", (e) => {
-  if (!currentForm) return;
-  const p = canvasCoords(e);
-  const m = currentForm.mouse;
-  if (m.inside) {
-    m.vx = p.x - m.x;
-    m.vy = p.y - m.y;
-  } else {
-    m.vx = 0;
-    m.vy = 0;
+// ===== Audio (synthesized pet chirps) =====
+
+let audioCtx = null;
+let audioUnlocked = false;
+function unlockAudio() {
+  if (audioUnlocked) return;
+  try {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    audioUnlocked = true;
+  } catch (_) {
+    audioUnlocked = false;
   }
-  m.speed = Math.hypot(m.vx, m.vy);
-  m.x = p.x;
-  m.y = p.y;
-  m.inside = true;
-});
-$scanCanvas.addEventListener("mouseleave", () => {
-  if (!currentForm) return;
-  currentForm.mouse.inside = false;
-});
-$scanCanvas.addEventListener("click", (e) => {
-  if (!currentForm) return;
-  const p = canvasCoords(e);
-  const colors = [PALETTE.green, PALETTE.pink, PALETTE.purple];
-  currentForm.ripples.push({
-    x: p.x,
-    y: p.y,
-    born: performance.now(),
-    c: colors[Math.floor(Math.random() * colors.length)],
-  });
-});
+}
+
+const CHIRP_PROFILES = {
+  orb:           { freq: 520,  sweep: 720,  dur: 0.18, type: "sine" },
+  wisp:          { freq: 880,  sweep: 600,  dur: 0.30, type: "triangle" },
+  crab:          { freq: 240,  sweep: 320,  dur: 0.12, type: "square" },
+  sapling:       { freq: 440,  sweep: 660,  dur: 0.22, type: "sine" },
+  serpent:       { freq: 320,  sweep: 200,  dur: 0.35, type: "sine" },
+  constellation: { freq: 1100, sweep: 1300, dur: 0.10, type: "sine" },
+  moth:          { freq: 600,  sweep: 780,  dur: 0.16, type: "triangle" },
+  bloom:         { freq: 700,  sweep: 900,  dur: 0.20, type: "sine" },
+  seraph:        { freq: 830,  sweep: 1100, dur: 0.24, type: "sine" },
+  drone:         { freq: 380,  sweep: 410,  dur: 0.18, type: "sawtooth" },
+};
+
+function playPetChirp(species) {
+  if (!audioUnlocked || !audioCtx) return;
+  const p = CHIRP_PROFILES[species] || CHIRP_PROFILES.orb;
+  const startTime = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = p.type;
+  osc.frequency.setValueAtTime(p.freq, startTime);
+  osc.frequency.exponentialRampToValueAtTime(p.sweep, startTime + p.dur);
+  gain.gain.setValueAtTime(0, startTime);
+  gain.gain.linearRampToValueAtTime(0.07, startTime + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.0001, startTime + p.dur);
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start(startTime);
+  osc.stop(startTime + p.dur + 0.05);
+  // Soft echo chirp
+  setTimeout(() => {
+    if (!audioCtx) return;
+    const t2 = audioCtx.currentTime;
+    const o2 = audioCtx.createOscillator();
+    const g2 = audioCtx.createGain();
+    o2.type = p.type;
+    o2.frequency.setValueAtTime(p.sweep * 0.9, t2);
+    o2.frequency.exponentialRampToValueAtTime(p.freq * 1.2, t2 + p.dur * 0.7);
+    g2.gain.setValueAtTime(0, t2);
+    g2.gain.linearRampToValueAtTime(0.04, t2 + 0.01);
+    g2.gain.exponentialRampToValueAtTime(0.0001, t2 + p.dur * 0.7);
+    o2.connect(g2);
+    g2.connect(audioCtx.destination);
+    o2.start(t2);
+    o2.stop(t2 + p.dur);
+  }, p.dur * 1100);
+}
+
+// ===== Form lifecycle =====
+
+function rebuildForm(seed) {
+  // Detach all current targets
+  if (currentForm) {
+    while (currentForm.targets.length) {
+      detachCanvas(currentForm, currentForm.targets[0].canvas);
+    }
+  }
+  currentForm = buildForm(seed);
+  attachCanvas(currentForm, $sideCanvas);
+  $sideWrap.classList.add("has-form");
+  $sideMeta.textContent = `${currentForm.species} · ${currentForm.schemeName}`;
+  if (animHandle == null) animHandle = requestAnimationFrame(renderForm);
+}
+
+// ===== Scanner modal =====
 
 function openScanner() {
   $scan.classList.remove("hidden");
-  $scanStatus.textContent = "ready";
-  $scanDesc.textContent = "// initiate scan to render the Guardian's current form.";
-  stopAnimation();
-  currentForm = null;
-  const ctx = $scanCanvas.getContext("2d");
-  ctx.fillStyle = "#02050a";
-  ctx.fillRect(0, 0, $scanCanvas.width, $scanCanvas.height);
+  unlockAudio();
+  if (currentForm) {
+    attachCanvas(currentForm, $scanCanvas);
+    $scanStatus.textContent = "form acquired // hover & click to interact";
+    $scanDesc.textContent = buildFormDescription(currentForm.seed);
+  } else {
+    $scanStatus.textContent = "ready";
+    $scanDesc.textContent = "// initiate scan to render the Guardian's current form.";
+    const ctx = $scanCanvas.getContext("2d");
+    ctx.fillStyle = "#02050a";
+    ctx.fillRect(0, 0, $scanCanvas.width, $scanCanvas.height);
+  }
 }
+
 function closeScanner() {
   $scan.classList.add("hidden");
-  stopAnimation();
+  if (currentForm) detachCanvas(currentForm, $scanCanvas);
 }
 
 function runScan() {
-  stopAnimation();
-  currentForm = null;
+  if (currentForm) detachCanvas(currentForm, $scanCanvas);
   $scanWrap.classList.remove("scanning");
-  // force reflow so the animation restarts
   void $scanWrap.offsetWidth;
   $scanWrap.classList.add("scanning");
   $scanStatus.textContent = "acquiring filament resonance...";
   $scanDesc.textContent = "// scanning";
 
-  const seed = currentSeed() ^ Math.floor(Math.random() * 0xffff);
-
   setTimeout(() => {
-    currentForm = buildForm($scanCanvas, seed);
+    const seed = currentSeed() ^ Math.floor(Math.random() * 0xffff);
+    rebuildForm(seed);
+    attachCanvas(currentForm, $scanCanvas);
     $scanStatus.textContent = "form acquired // hover & click to interact";
     $scanDesc.textContent = buildFormDescription(seed);
-    animHandle = requestAnimationFrame(renderForm);
   }, 1600);
 }
 
@@ -1800,10 +2491,16 @@ document.getElementById("btn-scan-go").addEventListener("click", runScan);
 document.getElementById("btn-scan-close").addEventListener("click", closeScanner);
 $scan.addEventListener("click", (e) => { if (e.target === $scan) closeScanner(); });
 
+// Unlock audio on any first user click anywhere
+document.addEventListener("click", unlockAudio, { once: true });
+
 // ---------- boot ----------------------------------------------------
 
 refreshStats();
 renderHistory();
+
+// Auto-build the companion form so the sidebar is alive on every visit.
+rebuildForm(currentSeed() || 1);
 
 const introSeen = localStorage.getItem(INTRO_KEY);
 if (!introSeen) {
