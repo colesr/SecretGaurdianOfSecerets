@@ -67,130 +67,175 @@
     position: relative;
   }
   header {
-    padding: 18px 22px 12px;
+    padding: 10px 16px 8px;
     border-bottom: 1px solid var(--line);
-    background: linear-gradient(180deg, #0a1410 0%, var(--bg) 100%);
+    background: var(--bg);
     position: relative;
     z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
   }
   header h1 {
     margin: 0;
-    font-size: 18px;
+    font-size: 11px;
     font-weight: 700;
-    letter-spacing: 0.18em;
+    letter-spacing: 0.22em;
     color: var(--green);
-    text-transform: uppercase;
     text-shadow:
-      0 0 8px rgba(95, 255, 159, 0.5),
-      2px 0 0 rgba(232, 160, 208, 0.4),
-     -2px 0 0 rgba(167, 139, 214, 0.4);
-    animation: glitch 6s infinite;
+      0 0 6px rgba(95, 255, 159, 0.4),
+      1px 0 0 rgba(232, 160, 208, 0.3),
+     -1px 0 0 rgba(167, 139, 214, 0.3);
+    animation: glitch 8s infinite;
   }
   @keyframes glitch {
-    0%, 92%, 100% { transform: translate(0,0); }
-    93%  { transform: translate(-1px, 0); text-shadow: 0 0 8px var(--green), 3px 0 0 var(--pink), -3px 0 0 var(--purple); }
-    94%  { transform: translate(2px, 0); }
-    95%  { transform: translate(-1px, 1px); }
-    96%  { transform: translate(0, -1px); }
+    0%, 94%, 100% { transform: translate(0,0); }
+    95%  { transform: translate(-1px, 0); }
+    96%  { transform: translate(1px, 0); }
+    97%  { transform: translate(0, 1px); }
   }
-  header .sub {
-    font-size: 11px;
-    color: var(--ink-dim);
-    margin-top: 6px;
-    letter-spacing: 0.05em;
-  }
-  header .sub::before { content: "// "; color: var(--purple); }
-  .toolbar {
+  .bar {
     display: flex;
     gap: 8px;
-    margin-top: 10px;
-    flex-wrap: wrap;
     align-items: center;
   }
-  .toolbar button, .toolbar .stat {
-    background: var(--bg-soft);
-    color: var(--ink);
+  .bar button {
+    background: transparent;
+    color: var(--ink-dim);
     border: 1px solid var(--line);
-    padding: 5px 11px;
+    padding: 3px 9px;
     font: inherit;
-    font-size: 11px;
+    font-size: 10px;
     cursor: pointer;
     border-radius: 1px;
-    text-transform: uppercase;
+    text-transform: lowercase;
     letter-spacing: 0.08em;
+    transition: color 0.15s, border-color 0.15s;
   }
-  .toolbar button:hover {
-    border-color: var(--green);
+  .bar button:hover {
     color: var(--green);
-    box-shadow: 0 0 6px rgba(95, 255, 159, 0.3);
+    border-color: var(--green);
   }
-  .toolbar .stat { cursor: default; color: var(--ink-dim); }
-  .toolbar .stat b { color: var(--pink); font-weight: 700; }
-  .toolbar #btn-scan {
-    border-color: var(--purple-dim);
-    color: var(--purple);
+  .bar .stats {
+    display: flex;
+    gap: 10px;
+    color: var(--ink-dim);
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    margin-left: 4px;
   }
-  .toolbar #btn-scan:hover {
-    border-color: var(--purple);
+  .bar .stats b {
+    color: var(--pink);
+    font-weight: 700;
+  }
+  .bar .stats #stat-phase {
     color: var(--purple);
-    box-shadow: 0 0 8px rgba(167, 139, 214, 0.4);
+    font-style: normal;
   }
 
-  #setup {
-    padding: 20px 22px;
-    background: var(--bg-soft);
-    border-bottom: 1px solid var(--line);
-    position: relative;
-    z-index: 1;
+  /* Settings modal */
+  #settings-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(5, 8, 7, 0.92);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    padding: 20px;
   }
-  #setup label {
-    display: block;
+  #settings {
+    width: 100%;
+    max-width: 380px;
+    background: var(--bg-soft);
+    border: 1px solid var(--green-dim);
+    padding: 22px 24px;
+    box-shadow: 0 0 30px rgba(95, 255, 159, 0.12);
+  }
+  #settings h2 {
+    margin: 0 0 16px;
     font-size: 11px;
+    color: var(--green);
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    font-weight: 700;
+  }
+  .set-group { margin-bottom: 12px; }
+  .set-group label {
+    display: block;
+    font-size: 9px;
     color: var(--purple);
-    margin-bottom: 6px;
     text-transform: uppercase;
     letter-spacing: 0.12em;
+    margin-bottom: 4px;
   }
-  #setup label::before { content: "> "; color: var(--green); }
-  #setup input {
+  #settings select, #settings input {
     width: 100%;
     background: var(--bg);
     color: var(--green);
     border: 1px solid var(--green-dim);
-    padding: 10px 12px;
+    padding: 7px 10px;
     font: inherit;
-    font-size: 13px;
+    font-size: 12px;
     border-radius: 1px;
   }
-  #setup input:focus {
+  #settings select:focus, #settings input:focus {
     outline: none;
     border-color: var(--green);
-    box-shadow: 0 0 8px rgba(95, 255, 159, 0.3);
   }
-  #setup .hint {
-    font-size: 11px;
+  #settings select option {
+    background: var(--bg);
+    color: var(--green);
+  }
+  .set-hint {
+    font-size: 10px;
     color: var(--ink-dim);
-    margin-top: 10px;
-    line-height: 1.6;
+    margin: 4px 0 14px;
+    line-height: 1.5;
+    min-height: 1em;
   }
-  #setup .hint a { color: var(--pink); }
-  #setup .row { display: flex; gap: 10px; margin-top: 12px; }
-  #setup .row button {
+  .set-hint a { color: var(--pink); }
+  .set-divider {
+    height: 1px;
+    background: var(--line);
+    margin: 14px 0 12px;
+  }
+  .set-row {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  #settings button {
     background: transparent;
     color: var(--green);
     border: 1px solid var(--green);
-    padding: 8px 22px;
+    padding: 6px 14px;
     font: inherit;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
+    font-size: 10px;
+    text-transform: lowercase;
+    letter-spacing: 0.1em;
     cursor: pointer;
     border-radius: 1px;
+    transition: all 0.15s;
   }
-  #setup .row button:hover {
+  #settings button:hover {
     background: var(--green);
     color: var(--bg);
-    box-shadow: 0 0 12px rgba(95, 255, 159, 0.5);
+  }
+  #settings button.ghost {
+    color: var(--ink-dim);
+    border-color: var(--line);
+  }
+  #settings button.ghost:hover {
+    color: var(--green);
+    border-color: var(--green);
+    background: transparent;
+  }
+  #settings button.danger:hover {
+    color: var(--danger);
+    border-color: var(--danger);
   }
 
   #main {
@@ -210,21 +255,14 @@
     min-width: 0;
   }
   #sidebar {
-    width: 260px;
+    width: 220px;
     flex-shrink: 0;
     border-left: 1px solid var(--line);
-    background: linear-gradient(180deg, #061010 0%, var(--bg) 100%);
-    padding: 18px 16px;
+    background: var(--bg);
+    padding: 14px 12px;
     display: flex;
     flex-direction: column;
-    gap: 10px;
-  }
-  .side-label {
-    font-size: 10px;
-    color: var(--green);
-    text-transform: uppercase;
-    letter-spacing: 0.16em;
-    text-shadow: 0 0 6px rgba(95,255,159,0.4);
+    gap: 8px;
   }
   .side-canvas-wrap {
     position: relative;
@@ -258,41 +296,75 @@
     position: absolute;
     inset: 0;
     display: flex;
-    flex-direction: column;
     align-items: center;
     justify-content: center;
-    color: var(--purple);
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    text-align: center;
-    pointer-events: none;
-  }
-  .side-empty span {
     color: var(--ink-dim);
-    font-size: 10px;
-    margin-top: 4px;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    pointer-events: none;
   }
   .side-canvas-wrap.has-form .side-empty { display: none; }
   .side-meta {
-    font-size: 11px;
-    color: var(--ink);
-    line-height: 1.5;
-    border-left: 2px solid var(--pink-dim);
-    padding-left: 10px;
-    min-height: 2em;
-  }
-  .side-hint {
-    font-size: 9px;
+    font-size: 10px;
     color: var(--ink-dim);
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    margin-top: auto;
+    text-transform: lowercase;
+    letter-spacing: 0.04em;
   }
   .side-canvas-wrap.attention {
     animation: attentionShake 0.5s ease-in-out 4;
     border-color: var(--pink);
     box-shadow: 0 0 18px rgba(232, 160, 208, 0.45);
+  }
+  #speech-bubble {
+    position: absolute;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%) translateY(8px);
+    background: rgba(2, 5, 10, 0.92);
+    border: 1px solid var(--green);
+    padding: 5px 11px;
+    font-size: 11px;
+    color: var(--green);
+    text-shadow: 0 0 6px rgba(95, 255, 159, 0.6);
+    white-space: nowrap;
+    max-width: 92%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.4s ease, transform 0.4s ease;
+    z-index: 10;
+    letter-spacing: 0.04em;
+    box-shadow: 0 0 12px rgba(95, 255, 159, 0.3);
+  }
+  #speech-bubble.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+  #speech-bubble::before {
+    content: "▸ ";
+    color: var(--pink);
+  }
+  #teach-row { display: flex; }
+  #teach-input {
+    flex: 1;
+    background: var(--bg);
+    color: var(--pink);
+    border: 1px solid var(--line);
+    padding: 5px 8px;
+    font: inherit;
+    font-size: 10px;
+    border-radius: 1px;
+    min-width: 0;
+  }
+  #teach-input::placeholder { color: var(--ink-dim); }
+  #teach-input:focus { outline: none; border-color: var(--pink-dim); }
+  .side-vocab {
+    font-size: 9px;
+    color: var(--ink-dim);
+    letter-spacing: 0.04em;
+    margin-top: auto;
   }
   @keyframes attentionShake {
     0%, 100% { transform: translate(0,0); }
@@ -596,48 +668,62 @@
 <body>
 
 <header>
-  <h1>The Secret Guardian of Secrets</h1>
-  <div class="sub">A mystic awaits. Speak, and prove you can listen.</div>
-  <div class="toolbar">
-    <button id="btn-scan">▣ Scan Form</button>
-    <button id="btn-status">Status</button>
-    <button id="btn-copy">Copy Transcript</button>
-    <button id="btn-export">Export Session</button>
-    <button id="btn-reset">Reset Journey</button>
-    <button id="btn-key">API Key</button>
-    <span class="stat">trust <b id="stat-trust">0</b>/100</span>
-    <span class="stat">phase <b id="stat-phase">initiate</b></span>
-    <span class="stat">teachings <b id="stat-teachings">0</b></span>
-    <span class="stat">bond <b id="stat-bond">0</b>/100</span>
+  <h1>SECRET GUARDIAN OF SECRETS</h1>
+  <div class="bar">
+    <button id="btn-scan" title="scan form">scan</button>
+    <button id="btn-settings" title="settings">⚙</button>
+    <span class="stats">
+      <span>t<b id="stat-trust">0</b></span>
+      <span>b<b id="stat-bond">0</b></span>
+      <span>v<b id="stat-teachings">0</b></span>
+      <span id="stat-phase">initiate</span>
+    </span>
   </div>
 </header>
-
-<section id="setup">
-  <label for="apikey">Gemini API Key (stored only in your browser)</label>
-  <input id="apikey" type="password" placeholder="paste your key here" autocomplete="off" />
-  <div class="row">
-    <button id="btn-save-key">Save & Begin</button>
-  </div>
-  <div class="hint">
-    Get a free key at <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">aistudio.google.com/app/apikey</a>.
-    Your key never leaves this browser — it's saved in localStorage and sent only to Google's API.
-  </div>
-</section>
 
 <div id="main">
   <main id="chat" aria-live="polite"></main>
   <aside id="sidebar">
-    <div class="side-label">▸ Companion</div>
     <div class="side-canvas-wrap">
       <canvas id="side-canvas" width="480" height="480"></canvas>
-      <div class="side-empty" id="side-empty">// no form scanned yet<br><span>open Scan Form to render</span></div>
+      <div class="side-empty" id="side-empty">no form</div>
+      <div id="speech-bubble"></div>
     </div>
-    <div class="side-meta" id="side-meta">awaiting signal</div>
-    <div class="side-hint">stroke gently to bond · click for ripples</div>
+    <div class="side-meta" id="side-meta">—</div>
+    <form id="teach-row" autocomplete="off">
+      <input id="teach-input" type="text" placeholder="teach a word..." maxlength="20" />
+    </form>
+    <div class="side-vocab" id="side-vocab">0 words</div>
   </aside>
 </div>
 
 <div id="toast"></div>
+
+<div id="settings-backdrop" class="hidden">
+  <div id="settings" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+    <h2 id="settings-title">settings</h2>
+    <div class="set-group">
+      <label>provider</label>
+      <select id="provider-select"></select>
+    </div>
+    <div class="set-group">
+      <label>api key</label>
+      <input id="apikey" type="password" placeholder="paste key" autocomplete="off" />
+    </div>
+    <div class="set-hint" id="provider-hint"></div>
+    <div class="set-row">
+      <button id="btn-save-key">save</button>
+      <button id="btn-settings-close" class="ghost">close</button>
+    </div>
+    <div class="set-divider"></div>
+    <div class="set-row">
+      <button id="btn-status" class="ghost">status</button>
+      <button id="btn-copy" class="ghost">copy</button>
+      <button id="btn-export" class="ghost">export</button>
+      <button id="btn-reset" class="ghost danger">reset</button>
+    </div>
+  </div>
+</div>
 
 <div id="scan-backdrop" class="hidden">
   <div id="scan" role="dialog" aria-modal="true" aria-labelledby="scan-title">
@@ -678,16 +764,74 @@
 
 <script>
 // =====================================================================
-// THE SECRET GUARDIAN OF SECRETS — single-file BYOK frontend for Gemini
+// THE SECRET GUARDIAN OF SECRETS — single-file BYOK frontend for Claude
 // =====================================================================
 
-const MODEL = "gemini-2.5-flash";
-const ENDPOINT = (model, key) =>
-  `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`;
+const STATE_KEY    = "secret_guardian_state_v1";
+const KEYS_KEY     = "secret_guardian_keys_v2";       // { providerId: apiKey }
+const PROVIDER_KEY = "secret_guardian_provider_v1";   // current provider id
+const INTRO_KEY    = "secret_guardian_intro_seen_v1";
 
-const STATE_KEY = "secret_guardian_state_v1";
-const KEY_KEY   = "secret_guardian_apikey_v1";
-const INTRO_KEY = "secret_guardian_intro_seen_v1";
+// Provider registry. Three protocols cover everything: Anthropic Messages,
+// OpenAI Chat Completions (used by many vendors), and Google Gemini.
+const PROVIDERS = {
+  anthropic: {
+    name: "Anthropic (Claude)",
+    model: "claude-haiku-4-5",
+    endpoint: "https://api.anthropic.com/v1/messages",
+    protocol: "anthropic",
+    keyHint: "sk-ant-...",
+    signupUrl: "https://console.anthropic.com/settings/keys",
+  },
+  openai: {
+    name: "OpenAI (GPT)",
+    model: "gpt-4o-mini",
+    endpoint: "https://api.openai.com/v1/chat/completions",
+    protocol: "openai",
+    keyHint: "sk-...",
+    signupUrl: "https://platform.openai.com/api-keys",
+  },
+  google: {
+    name: "Google (Gemini)",
+    model: "gemini-2.5-flash",
+    endpoint: "https://generativelanguage.googleapis.com/v1beta/models",
+    protocol: "google",
+    keyHint: "AIza...",
+    signupUrl: "https://aistudio.google.com/app/apikey",
+  },
+  groq: {
+    name: "Groq (Llama)",
+    model: "llama-3.3-70b-versatile",
+    endpoint: "https://api.groq.com/openai/v1/chat/completions",
+    protocol: "openai",
+    keyHint: "gsk_...",
+    signupUrl: "https://console.groq.com/keys",
+  },
+  openrouter: {
+    name: "OpenRouter",
+    model: "anthropic/claude-haiku-4.5",
+    endpoint: "https://openrouter.ai/api/v1/chat/completions",
+    protocol: "openai",
+    keyHint: "sk-or-...",
+    signupUrl: "https://openrouter.ai/keys",
+  },
+  mistral: {
+    name: "Mistral",
+    model: "mistral-small-latest",
+    endpoint: "https://api.mistral.ai/v1/chat/completions",
+    protocol: "openai",
+    keyHint: "...",
+    signupUrl: "https://console.mistral.ai/api-keys",
+  },
+  xai: {
+    name: "xAI (Grok)",
+    model: "grok-2-latest",
+    endpoint: "https://api.x.ai/v1/chat/completions",
+    protocol: "openai",
+    keyHint: "xai-...",
+    signupUrl: "https://console.x.ai",
+  },
+};
 
 const PHASE_STUDENT = 25;
 const PHASE_ADEPT   = 55;
@@ -709,6 +853,7 @@ function freshState() {
     },
     history: [],
     bond: 0,
+    vocabulary: [],
     created: new Date().toISOString(),
   };
 }
@@ -716,6 +861,7 @@ function freshState() {
 // Migrate older saves
 function migrateState(s) {
   if (typeof s.bond !== "number") s.bond = 0;
+  if (!Array.isArray(s.vocabulary)) s.vocabulary = [];
   return s;
 }
 
@@ -896,33 +1042,88 @@ function applyMeta(s, meta) {
   s.phase = phaseForTrust(s.trust, s.deity_revealed);
 }
 
-// ---------- gemini call --------------------------------------------
+// ---------- claude call --------------------------------------------
 
-function toGeminiContents(history) {
-  return history.map(turn => ({
-    role: turn.role === "user" ? "user" : "model",
-    parts: [{ text: turn.content }],
-  }));
+async function callLLM(providerId, apiKey, systemPrompt, history) {
+  const cfg = PROVIDERS[providerId];
+  if (!cfg) throw new Error("unknown provider: " + providerId);
+  switch (cfg.protocol) {
+    case "anthropic": return callAnthropic(cfg, apiKey, systemPrompt, history);
+    case "openai":    return callOpenAICompatible(cfg, apiKey, systemPrompt, history);
+    case "google":    return callGoogle(cfg, apiKey, systemPrompt, history);
+    default: throw new Error("unknown protocol");
+  }
 }
 
-async function callGemini(apiKey, systemPrompt, history) {
+async function callAnthropic(cfg, apiKey, systemPrompt, history) {
+  const body = {
+    model: cfg.model,
+    max_tokens: 1200,
+    temperature: 0.9,
+    system: systemPrompt,
+    messages: history.map(t => ({
+      role: t.role === "user" ? "user" : "assistant",
+      content: t.content,
+    })),
+  };
+  const res = await fetch(cfg.endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true",
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`${cfg.name} ${res.status}: ${await res.text()}`);
+  const data = await res.json();
+  return (data?.content || []).filter(p => p.type === "text").map(p => p.text || "").join("").trim();
+}
+
+async function callOpenAICompatible(cfg, apiKey, systemPrompt, history) {
+  const messages = [{ role: "system", content: systemPrompt }];
+  for (const t of history) {
+    messages.push({
+      role: t.role === "user" ? "user" : "assistant",
+      content: t.content,
+    });
+  }
+  const body = {
+    model: cfg.model,
+    messages,
+    temperature: 0.9,
+    max_tokens: 1200,
+  };
+  const res = await fetch(cfg.endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + apiKey,
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`${cfg.name} ${res.status}: ${await res.text()}`);
+  const data = await res.json();
+  return (data?.choices?.[0]?.message?.content || "").trim();
+}
+
+async function callGoogle(cfg, apiKey, systemPrompt, history) {
   const body = {
     system_instruction: { parts: [{ text: systemPrompt }] },
-    contents: toGeminiContents(history),
-    generationConfig: {
-      temperature: 0.9,
-      maxOutputTokens: 1200,
-    },
+    contents: history.map(t => ({
+      role: t.role === "user" ? "user" : "model",
+      parts: [{ text: t.content }],
+    })),
+    generationConfig: { temperature: 0.9, maxOutputTokens: 1200 },
   };
-  const res = await fetch(ENDPOINT(MODEL, apiKey), {
+  const url = `${cfg.endpoint}/${cfg.model}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(`Gemini API ${res.status}: ${txt}`);
-  }
+  if (!res.ok) throw new Error(`${cfg.name} ${res.status}: ${await res.text()}`);
   const data = await res.json();
   const parts = data?.candidates?.[0]?.content?.parts || [];
   return parts.map(p => p.text || "").join("").trim();
@@ -930,13 +1131,15 @@ async function callGemini(apiKey, systemPrompt, history) {
 
 // ---------- UI ------------------------------------------------------
 
-const $chat   = document.getElementById("chat");
-const $input  = document.getElementById("input");
-const $send   = document.getElementById("send");
-const $form   = document.getElementById("compose");
-const $setup  = document.getElementById("setup");
-const $apikey = document.getElementById("apikey");
-const $saveKey= document.getElementById("btn-save-key");
+const $chat        = document.getElementById("chat");
+const $input       = document.getElementById("input");
+const $send        = document.getElementById("send");
+const $form        = document.getElementById("compose");
+const $settings    = document.getElementById("settings-backdrop");
+const $apikey      = document.getElementById("apikey");
+const $saveKey     = document.getElementById("btn-save-key");
+const $providerSel = document.getElementById("provider-select");
+const $providerHint= document.getElementById("provider-hint");
 
 const $statTrust    = document.getElementById("stat-trust");
 const $statPhase    = document.getElementById("stat-phase");
@@ -984,36 +1187,90 @@ function renderHistory() {
 
 // ---------- handlers ------------------------------------------------
 
-function getApiKey() { return localStorage.getItem(KEY_KEY) || ""; }
-function setApiKey(k) { localStorage.setItem(KEY_KEY, k); }
-
-function showSetup(show) {
-  $setup.classList.toggle("hidden", !show);
+// Multi-vendor key storage
+function loadKeys() {
+  try {
+    const raw = localStorage.getItem(KEYS_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (_) {}
+  // Migration: pick up the old single Anthropic key if present
+  const old = localStorage.getItem("secret_guardian_apikey_anthropic_v1");
+  if (old) return { anthropic: old };
+  return {};
+}
+function saveKeys(keys) { localStorage.setItem(KEYS_KEY, JSON.stringify(keys)); }
+function getProviderId() { return localStorage.getItem(PROVIDER_KEY) || "anthropic"; }
+function setProviderId(id) { localStorage.setItem(PROVIDER_KEY, id); }
+function getApiKey() {
+  const keys = loadKeys();
+  return keys[getProviderId()] || "";
+}
+function setApiKey(providerId, key) {
+  const keys = loadKeys();
+  keys[providerId] = key;
+  saveKeys(keys);
 }
 
+function populateProviderSelect() {
+  $providerSel.innerHTML = "";
+  for (const [id, cfg] of Object.entries(PROVIDERS)) {
+    const opt = document.createElement("option");
+    opt.value = id;
+    opt.textContent = cfg.name;
+    $providerSel.appendChild(opt);
+  }
+}
+
+function refreshSettingsUi() {
+  const id = getProviderId();
+  $providerSel.value = id;
+  const cfg = PROVIDERS[id];
+  const keys = loadKeys();
+  $apikey.value = keys[id] || "";
+  $apikey.placeholder = cfg.keyHint;
+  $providerHint.innerHTML = `model: ${cfg.model} · <a href="${cfg.signupUrl}" target="_blank" rel="noopener">get key</a>`;
+}
+
+function openSettings() {
+  populateProviderSelect();
+  refreshSettingsUi();
+  $settings.classList.remove("hidden");
+  setTimeout(() => $apikey.focus(), 50);
+}
+function closeSettings() {
+  $settings.classList.add("hidden");
+}
+
+$providerSel.addEventListener("change", () => {
+  setProviderId($providerSel.value);
+  refreshSettingsUi();
+});
+
 $saveKey.addEventListener("click", () => {
+  const id = $providerSel.value;
   const k = $apikey.value.trim();
   if (!k) { $apikey.focus(); return; }
-  setApiKey(k);
-  $apikey.value = "";
-  showSetup(false);
+  setProviderId(id);
+  setApiKey(id, k);
+  closeSettings();
   if (state.history.length === 0) {
     addMsg("system", "the river stirs. the Guardian listens. speak first.");
   }
   $input.focus();
 });
 
-document.getElementById("btn-key").addEventListener("click", () => {
-  showSetup(true);
-  $apikey.focus();
-});
+document.getElementById("btn-settings").addEventListener("click", openSettings);
+document.getElementById("btn-settings-close").addEventListener("click", closeSettings);
+$settings.addEventListener("click", (e) => { if (e.target === $settings) closeSettings(); });
 
 document.getElementById("btn-reset").addEventListener("click", () => {
-  if (!confirm("Reset your journey? All trust, teachings, and lore will be lost.")) return;
+  if (!confirm("Reset your journey? All trust, teachings, vocab, and bond will be lost.")) return;
   state = freshState();
   saveState(state);
   refreshStats();
+  refreshVocabUi();
   renderHistory();
+  closeSettings();
   addMsg("system", "the river forgets. a new student arrives.");
 });
 
@@ -1027,7 +1284,7 @@ function hideIntro() {
 }
 document.getElementById("btn-intro-begin").addEventListener("click", () => {
   hideIntro();
-  if (!getApiKey()) { showSetup(true); $apikey.focus(); }
+  if (!getApiKey()) openSettings();
   else $input.focus();
 });
 
@@ -1147,9 +1404,9 @@ $input.addEventListener("keydown", (e) => {
 $form.addEventListener("submit", async (e) => {
   e.preventDefault();
   const apiKey = getApiKey();
+  const providerId = getProviderId();
   if (!apiKey) {
-    showSetup(true);
-    $apikey.focus();
+    openSettings();
     return;
   }
   const text = $input.value.trim();
@@ -1157,6 +1414,8 @@ $form.addEventListener("submit", async (e) => {
 
   addMsg("user", text);
   state.history.push({ role: "user", content: text });
+  // Feed words to the companion's vocabulary
+  addVocabFromText(text);
   saveState(state);
 
   $input.value = "";
@@ -1170,7 +1429,7 @@ $form.addEventListener("submit", async (e) => {
   $chat.scrollTop = $chat.scrollHeight;
 
   try {
-    const raw = await callGemini(apiKey, buildSystemPrompt(state), state.history);
+    const raw = await callLLM(providerId, apiKey, buildSystemPrompt(state), state.history);
     const { spoken, meta } = splitReply(raw);
     state.history.push({ role: "assistant", content: raw });
     const prevPhase = state.phase;
@@ -1392,6 +1651,8 @@ function buildForm(seed) {
     attentionMode: null,
     wiggleOffsetX: 0,
     wiggleOffsetY: 0,
+    nextSpeechAt: nowMs + 12000 + Math.random() * 18000,
+    pettingSpeechCooldown: 0,
   };
 }
 
@@ -2227,6 +2488,9 @@ function renderForm(now) {
   // ----- Attention behavior -----
   updateAttention(f, now);
 
+  // ----- Speech behavior -----
+  updateSpeech(f, now, petting);
+
   // ----- Render to all targets -----
   for (const target of f.targets) {
     renderToTarget(f, target, now, t);
@@ -2361,6 +2625,25 @@ function updateAttention(f, now) {
   }
 }
 
+function updateSpeech(f, now, petting) {
+  // Don't speak if intro modal still showing
+  if (!localStorage.getItem(INTRO_KEY)) return;
+
+  // Petting can prompt a fond utterance — but only after a cooldown
+  if (petting && now > f.pettingSpeechCooldown && Math.random() < 0.012) {
+    speakSomething();
+    f.pettingSpeechCooldown = now + 6000;
+    f.nextSpeechAt = now + 14000 + Math.random() * 14000;
+    return;
+  }
+
+  // Idle scheduled speech
+  if (now > f.nextSpeechAt) {
+    speakSomething();
+    f.nextSpeechAt = now + 18000 + Math.random() * 22000;
+  }
+}
+
 function stopAnimation() {
   if (animHandle != null) {
     cancelAnimationFrame(animHandle);
@@ -2429,6 +2712,168 @@ function playPetChirp(species) {
     o2.stop(t2 + p.dur);
   }, p.dur * 1100);
 }
+
+// ===== Vocabulary & speech =====
+//
+// The companion learns words from your chat and from a dedicated "teach"
+// input. As bond grows it speaks more clearly: from glyphs → fragments
+// → single words → phrases. Speech shows in a bubble above the canvas
+// AND is spoken aloud by the browser's speech synthesis with a per-
+// species pitch profile.
+
+const VOCAB_MAX = 80;
+const STOP_WORDS = new Set([
+  "the","a","an","and","or","but","of","to","in","on","at","by","for","with",
+  "is","are","was","were","be","been","being","am","do","does","did",
+  "i","you","me","my","your","we","us","our","they","them","their","it","its",
+  "this","that","these","those","there","here","what","when","where","why","how",
+  "if","so","as","not","no","yes","just","very","really","like","than","then","too",
+  "have","has","had","will","would","can","could","should","may","might","must",
+  "from","into","onto","upon","about","over","under","out","up","down","off",
+]);
+
+function addVocabFromText(text) {
+  if (!text) return 0;
+  const words = (text.toLowerCase().match(/[a-z]{3,12}/g) || []);
+  let added = 0;
+  for (const w of words) {
+    if (STOP_WORDS.has(w)) continue;
+    if (state.vocabulary.includes(w)) continue;
+    state.vocabulary.push(w);
+    if (state.vocabulary.length > VOCAB_MAX) state.vocabulary.shift();
+    added++;
+  }
+  if (added) {
+    saveState(state);
+    refreshVocabUi();
+  }
+  return added;
+}
+
+function refreshVocabUi() {
+  const $v = document.getElementById("side-vocab");
+  if ($v) $v.textContent = `// vocabulary: ${state.vocabulary.length} word${state.vocabulary.length === 1 ? "" : "s"}`;
+}
+
+const GLYPHS = ["⌖","⌬","⍟","◈","◉","✦","⟁","⟢","⟆","◬","⏣","⌘","⎈","⏃","⌗"];
+
+function mangleWord(word, level) {
+  // level: 0..1 — 0 = pure glyph, 1 = perfect word
+  if (level < 0.15) {
+    // Pure glyphs
+    let s = "";
+    for (let i = 0; i < 3 + Math.floor(Math.random() * 4); i++) {
+      s += GLYPHS[Math.floor(Math.random() * GLYPHS.length)];
+    }
+    return s;
+  }
+  if (level < 0.35) {
+    // Word as scattered letters with dots
+    const letters = word.split("");
+    return letters.map(l => Math.random() < 0.5 ? l : ".").join("");
+  }
+  if (level < 0.55) {
+    // First syllable + ellipsis
+    const cut = Math.max(2, Math.min(word.length - 1, Math.ceil(word.length * 0.5)));
+    return word.slice(0, cut) + "...";
+  }
+  if (level < 0.8) {
+    // Whole word, sometimes stuttered
+    if (Math.random() < 0.4) {
+      return word[0] + "..." + word[0] + word.slice(1);
+    }
+    return word;
+  }
+  return word;
+}
+
+function buildSpeech() {
+  if (state.vocabulary.length === 0) {
+    return { text: GLYPHS[Math.floor(Math.random() * GLYPHS.length)] + GLYPHS[Math.floor(Math.random() * GLYPHS.length)] + GLYPHS[Math.floor(Math.random() * GLYPHS.length)], spoken: "" };
+  }
+  // Speech level scales with bond AND trust together — being known matters
+  const bondT = (state.bond || 0) / 100;
+  const trustT = (state.trust || 0) / 100;
+  const level = Math.min(1, bondT * 0.7 + trustT * 0.3);
+
+  let wordCount = 1;
+  if (level > 0.55) wordCount = 2;
+  if (level > 0.75) wordCount = 2 + Math.floor(Math.random() * 2);
+  if (level > 0.9)  wordCount = 3 + Math.floor(Math.random() * 2);
+
+  const picks = [];
+  for (let i = 0; i < wordCount; i++) {
+    picks.push(state.vocabulary[Math.floor(Math.random() * state.vocabulary.length)]);
+  }
+  const mangled = picks.map(w => mangleWord(w, level));
+  return { text: mangled.join(" "), spoken: picks.join(" "), level };
+}
+
+const $speechBubble = document.getElementById("speech-bubble");
+let speechHideTimer = null;
+
+function showSpeech(text) {
+  if (!$speechBubble) return;
+  $speechBubble.textContent = text;
+  $speechBubble.classList.add("show");
+  clearTimeout(speechHideTimer);
+  speechHideTimer = setTimeout(() => {
+    $speechBubble.classList.remove("show");
+  }, 3800);
+}
+
+// Per-species voice pitch — tiny creatures speak high, heavy ones low.
+const SPECIES_PITCH = {
+  orb: 1.0,
+  wisp: 1.2,
+  crab: 0.55,
+  sapling: 0.9,
+  serpent: 0.7,
+  constellation: 1.5,
+  moth: 1.3,
+  bloom: 1.1,
+  seraph: 0.85,
+  drone: 0.5,
+};
+
+function speakAloud(text, species) {
+  if (!text || typeof window.speechSynthesis === "undefined") return;
+  try {
+    const u = new SpeechSynthesisUtterance(text);
+    u.pitch = SPECIES_PITCH[species] || 1.0;
+    u.rate = 0.72;
+    u.volume = 0.55;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(u);
+  } catch (_) {}
+}
+
+function speakSomething() {
+  if (!currentForm) return;
+  const { text, spoken } = buildSpeech();
+  showSpeech(text);
+  // Only speak aloud once we have actual words (not pure glyphs).
+  if (spoken) speakAloud(spoken, currentForm.species);
+}
+
+// Wire teach input
+const $teachInput = document.getElementById("teach-input");
+const $teachForm = document.getElementById("teach-row");
+$teachForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const raw = $teachInput.value.trim();
+  if (!raw) return;
+  const added = addVocabFromText(raw);
+  $teachInput.value = "";
+  if (added > 0) {
+    // Immediate echo — the creature tries the new word now
+    setTimeout(() => speakSomething(), 200);
+    if (currentForm) currentForm.lastInteractionAt = performance.now();
+    toast(`taught: ${raw.toLowerCase()}`);
+  } else {
+    toast("nothing to learn there");
+  }
+});
 
 // ===== Form lifecycle =====
 
@@ -2501,18 +2946,19 @@ renderHistory();
 
 // Auto-build the companion form so the sidebar is alive on every visit.
 rebuildForm(currentSeed() || 1);
+refreshVocabUi();
+
+populateProviderSelect();
 
 const introSeen = localStorage.getItem(INTRO_KEY);
 if (!introSeen) {
   showIntro();
-  showSetup(false); // intro modal handles the next step
 } else if (getApiKey()) {
-  showSetup(false);
   if (state.history.length === 0) {
     addMsg("system", "the river stirs. the Guardian listens. speak first.");
   }
 } else {
-  showSetup(true);
+  openSettings();
 }
 </script>
 </body>
