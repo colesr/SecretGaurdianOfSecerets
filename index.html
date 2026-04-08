@@ -310,6 +310,12 @@
     color: var(--ink-dim);
     text-transform: lowercase;
     letter-spacing: 0.04em;
+    white-space: pre-line;
+    line-height: 1.35;
+  }
+  .side-meta::first-line {
+    color: var(--green);
+    font-style: italic;
   }
   .side-canvas-wrap.attention {
     animation: attentionShake 0.5s ease-in-out 4;
@@ -1527,16 +1533,29 @@ let currentForm = null;
 let animHandle = null;
 
 const SCHEMES = [
-  { name: "verdant",    primary: PALETTE.green,  secondary: PALETTE.purple, accent: PALETTE.pink   },
-  { name: "rosethorn",  primary: PALETTE.pink,   secondary: PALETTE.green,  accent: PALETTE.purple },
-  { name: "amethyst",   primary: PALETTE.purple, secondary: PALETTE.pink,   accent: PALETTE.green  },
-  { name: "duskglow",   primary: PALETTE.green,  secondary: PALETTE.pink,   accent: PALETTE.purple },
-  { name: "feverbloom", primary: PALETTE.pink,   secondary: PALETTE.purple, accent: PALETTE.green  },
+  { name: "verdant",    primary: PALETTE.green,    secondary: PALETTE.purple, accent: PALETTE.pink   },
+  { name: "rosethorn",  primary: PALETTE.pink,     secondary: PALETTE.green,  accent: PALETTE.purple },
+  { name: "amethyst",   primary: PALETTE.purple,   secondary: PALETTE.pink,   accent: PALETTE.green  },
+  { name: "duskglow",   primary: PALETTE.green,    secondary: PALETTE.pink,   accent: PALETTE.purple },
+  { name: "feverbloom", primary: PALETTE.pink,     secondary: PALETTE.purple, accent: PALETTE.green  },
+  { name: "moonsilver", primary: [200, 220, 240],  secondary: PALETTE.purple, accent: PALETTE.pink   },
+  { name: "ember",      primary: [255, 150, 90],   secondary: PALETTE.pink,   accent: PALETTE.purple },
+  { name: "sickly",     primary: [180, 255, 90],   secondary: PALETTE.green,  accent: PALETTE.pink   },
+  { name: "oilslick",   primary: [120, 180, 200],  secondary: PALETTE.purple, accent: PALETTE.green  },
+  { name: "marrow",     primary: [240, 210, 200],  secondary: PALETTE.pink,   accent: PALETTE.purple },
+  { name: "voidlight",  primary: [100, 80, 220],   secondary: PALETTE.green,  accent: PALETTE.pink   },
+  { name: "rust",       primary: [220, 120, 80],   secondary: PALETTE.purple, accent: PALETTE.green  },
+  { name: "abyssal",    primary: [60, 90, 200],    secondary: PALETTE.green,  accent: PALETTE.pink   },
+  { name: "spore",      primary: [130, 220, 130],  secondary: [220, 180, 100],accent: PALETTE.purple },
+  { name: "deepwell",   primary: [70, 200, 180],   secondary: PALETTE.purple, accent: PALETTE.pink   },
+  { name: "saltflame",  primary: [255, 220, 150],  secondary: PALETTE.pink,   accent: PALETTE.green  },
 ];
 
 const SPECIES_NAMES = [
   "orb", "wisp", "crab", "sapling", "serpent",
   "constellation", "moth", "bloom", "seraph", "drone",
+  "jellyfish", "fungus", "eyecluster", "geode",
+  "voidmouth", "lattice", "ribbon",
 ];
 
 function buildForm(seed) {
@@ -1586,6 +1605,16 @@ function buildForm(seed) {
     drawSigil(ctx, cx, cy, body.sigilR, rng, scheme, body.sigilType);
   }
 
+  // Modular accessory traits — overlay on top of any species
+  const traits = rollTraits(rng);
+  applyTraits(ctx, body, traits, params);
+
+  // Eye pupil variants (slit/round/cross/diamond/spiral/x)
+  assignEyeVariants(body.eyes, rng);
+
+  // Procedural creature name
+  const creatureName = generateCreatureName(rng);
+
   // Glitch bands
   const bands = ri(2, 5);
   for (let i = 0; i < bands; i++) {
@@ -1630,6 +1659,8 @@ function buildForm(seed) {
     species,
     schemeName: scheme.name,
     scheme,
+    name: creatureName,
+    traits,
     coreR: body.coreR,
     sigilR: body.sigilR,
     bodyR: body.bodyR,
@@ -2087,6 +2118,299 @@ function buildSpecies_drone(p) {
   return { eyes, coreR: hexR, sigilR: hexR * 1.6, bodyR: hexR * 1.2, sigilType: "polygon" };
 }
 
+// ===== Additional species (creativity expansion) =====
+
+function buildSpecies_jellyfish(p) {
+  const { ctx, cx, cy, W, rng, r, ri, scheme } = p;
+  const headRx = r(W * 0.14, W * 0.20);
+  const headRy = headRx * 0.55;
+  const headY = cy - headRy * 0.3;
+  // Bell dome
+  const grad = ctx.createRadialGradient(cx, headY - headRy * 0.3, headRy * 0.2, cx, headY, headRx);
+  grad.addColorStop(0, `rgba(${scheme.primary.join(",")},0.6)`);
+  grad.addColorStop(0.7, `rgba(${scheme.secondary.join(",")},0.35)`);
+  grad.addColorStop(1, "rgba(0,0,0,0.8)");
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.ellipse(cx, headY, headRx, headRy, 0, Math.PI, 2 * Math.PI);
+  ctx.lineTo(cx + headRx, headY);
+  ctx.lineTo(cx - headRx, headY);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(cx, headY, headRx, headRy, 0, Math.PI, 2 * Math.PI);
+  ctx.strokeStyle = `rgba(${scheme.primary.join(",")},0.7)`;
+  ctx.lineWidth = 1;
+  ctx.shadowColor = `rgba(${scheme.primary.join(",")},0.6)`;
+  ctx.shadowBlur = 6;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  // Trailing tentacles
+  const tentacleCount = ri(7, 13);
+  for (let i = 0; i < tentacleCount; i++) {
+    const t = i / Math.max(1, tentacleCount - 1);
+    const sx = cx - headRx + t * headRx * 2;
+    const sy = headY;
+    let py = sy;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    for (let s = 0; s < 10; s++) {
+      py += W * 0.022;
+      const wx = sx + Math.sin(py * 0.06 + i * 1.3) * 5;
+      ctx.lineTo(wx, py);
+    }
+    ctx.strokeStyle = `rgba(${scheme.secondary.join(",")},${r(0.3, 0.6)})`;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+  const eyes = [
+    { x: cx - headRx * 0.32, y: headY - headRy * 0.25, r: headRx * 0.09, px: 0, py: 0 },
+    { x: cx + headRx * 0.32, y: headY - headRy * 0.25, r: headRx * 0.09, px: 0, py: 0 },
+  ];
+  return { eyes, coreR: headRx, sigilR: headRx * 1.4, bodyR: headRx * 1.4, sigilType: "circle" };
+}
+
+function buildSpecies_fungus(p) {
+  const { ctx, cx, cy, W, rng, r, ri, scheme } = p;
+  const capRx = r(W * 0.15, W * 0.22);
+  const capRy = capRx * 0.5;
+  const capY = cy - W * 0.04;
+  const grad = ctx.createRadialGradient(cx, capY - capRy * 0.4, capRy * 0.2, cx, capY, capRx);
+  grad.addColorStop(0, `rgba(${scheme.primary.join(",")},0.65)`);
+  grad.addColorStop(1, "rgba(0,0,0,0.85)");
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.ellipse(cx, capY, capRx, capRy, 0, Math.PI, 2 * Math.PI);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = `rgba(${scheme.primary.join(",")},0.6)`;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  // Cap dots
+  for (let i = 0; i < 7; i++) {
+    const ang = -Math.PI + (i + 1) * (Math.PI / 8) + (rng() - 0.5) * 0.15;
+    const dx = cx + Math.cos(ang) * capRx * 0.65;
+    const dy = capY + Math.sin(ang) * capRy * 0.55;
+    ctx.fillStyle = `rgba(${scheme.accent.join(",")},0.85)`;
+    ctx.beginPath();
+    ctx.arc(dx, dy, 2 + rng() * 1.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Stem
+  const stemH = W * 0.18;
+  const stemW = capRx * 0.4;
+  ctx.fillStyle = `rgba(${scheme.secondary.join(",")},0.45)`;
+  ctx.fillRect(cx - stemW / 2, capY, stemW, stemH);
+  ctx.strokeStyle = `rgba(${scheme.secondary.join(",")},0.7)`;
+  ctx.strokeRect(cx - stemW / 2, capY, stemW, stemH);
+  // Spore particles drifting down
+  for (let i = 0; i < 30; i++) {
+    const sx = cx + (rng() - 0.5) * W * 0.4;
+    const sy = capY + capRy + rng() * W * 0.32;
+    ctx.fillStyle = `rgba(${scheme.accent.join(",")},${r(0.2, 0.5)})`;
+    ctx.fillRect(sx, sy, 1, 1);
+  }
+  const eyes = [
+    { x: cx - stemW * 0.25, y: capY + stemH * 0.4, r: capRx * 0.06, px: 0, py: 0 },
+    { x: cx + stemW * 0.25, y: capY + stemH * 0.4, r: capRx * 0.06, px: 0, py: 0 },
+  ];
+  return { eyes, coreR: capRx, sigilR: capRx * 1.3, bodyR: capRx * 1.3, sigilType: "none" };
+}
+
+function buildSpecies_eyecluster(p) {
+  const { ctx, cx, cy, W, rng, r, ri, scheme } = p;
+  const eyeCount = ri(5, 9);
+  const eyes = [];
+  for (let i = 0; i < eyeCount; i++) {
+    const ang = (i / eyeCount) * Math.PI * 2 + rng() * 0.5;
+    const rad = r(W * 0.04, W * 0.14);
+    const ex = cx + Math.cos(ang) * rad;
+    const ey = cy + Math.sin(ang) * rad;
+    const er = r(W * 0.02, W * 0.038);
+    eyes.push({ x: ex, y: ey, r: er, px: 0, py: 0 });
+  }
+  // Connecting sinew
+  for (let i = 0; i < eyes.length; i++) {
+    for (let j = i + 1; j < eyes.length; j++) {
+      const d = Math.hypot(eyes[i].x - eyes[j].x, eyes[i].y - eyes[j].y);
+      if (d < W * 0.13) {
+        ctx.beginPath();
+        ctx.moveTo(eyes[i].x, eyes[i].y);
+        const mx = (eyes[i].x + eyes[j].x) / 2 + (rng() - 0.5) * 10;
+        const my = (eyes[i].y + eyes[j].y) / 2 + (rng() - 0.5) * 10;
+        ctx.quadraticCurveTo(mx, my, eyes[j].x, eyes[j].y);
+        ctx.strokeStyle = `rgba(${scheme.secondary.join(",")},${r(0.2, 0.45)})`;
+        ctx.lineWidth = 0.7;
+        ctx.shadowColor = `rgba(${scheme.secondary.join(",")},0.4)`;
+        ctx.shadowBlur = 3;
+        ctx.stroke();
+      }
+    }
+  }
+  ctx.shadowBlur = 0;
+  return { eyes, coreR: W * 0.13, sigilR: W * 0.18, bodyR: W * 0.18, sigilType: "broken-arc" };
+}
+
+function buildSpecies_geode(p) {
+  const { ctx, cx, cy, W, rng, r, ri, scheme } = p;
+  const facets = ri(6, 9);
+  const baseR = r(W * 0.13, W * 0.18);
+  const points = [];
+  for (let i = 0; i < facets; i++) {
+    const ang = (i / facets) * Math.PI * 2 - Math.PI / 2;
+    const rad = baseR * (0.7 + rng() * 0.55);
+    points.push({ x: cx + Math.cos(ang) * rad, y: cy + Math.sin(ang) * rad });
+  }
+  const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, baseR);
+  grad.addColorStop(0, `rgba(${scheme.primary.join(",")},0.55)`);
+  grad.addColorStop(0.7, `rgba(${scheme.secondary.join(",")},0.3)`);
+  grad.addColorStop(1, "rgba(0,0,0,0.85)");
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  for (let i = 0; i < points.length; i++) {
+    if (i === 0) ctx.moveTo(points[i].x, points[i].y);
+    else ctx.lineTo(points[i].x, points[i].y);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = `rgba(${scheme.primary.join(",")},0.7)`;
+  ctx.lineWidth = 1;
+  ctx.shadowColor = `rgba(${scheme.primary.join(",")},0.7)`;
+  ctx.shadowBlur = 6;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  // Inner facet lines
+  for (const pt of points) {
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(pt.x, pt.y);
+    ctx.strokeStyle = `rgba(${scheme.accent.join(",")},0.32)`;
+    ctx.lineWidth = 0.6;
+    ctx.stroke();
+  }
+  drawMouth(ctx, cx, cy + baseR * 0.4, baseR * 0.6, rng, scheme, ri(0, 5));
+  const eyes = [
+    { x: cx - baseR * 0.35, y: cy - baseR * 0.1, r: baseR * 0.16, px: 0, py: 0 },
+    { x: cx + baseR * 0.35, y: cy - baseR * 0.1, r: baseR * 0.16, px: 0, py: 0 },
+  ];
+  return { eyes, coreR: baseR, sigilR: baseR * 1.5, bodyR: baseR * 1.2, sigilType: "polygon" };
+}
+
+function buildSpecies_voidmouth(p) {
+  const { ctx, cx, cy, W, rng, r, ri, scheme } = p;
+  const mouthR = r(W * 0.16, W * 0.22);
+  const grad = ctx.createRadialGradient(cx, cy, mouthR * 0.3, cx, cy, mouthR);
+  grad.addColorStop(0, "rgba(0,0,0,0.95)");
+  grad.addColorStop(0.6, `rgba(${scheme.secondary.join(",")},0.4)`);
+  grad.addColorStop(1, `rgba(${scheme.primary.join(",")},0.5)`);
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, mouthR, mouthR * 0.7, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = `rgba(${scheme.primary.join(",")},0.75)`;
+  ctx.lineWidth = 1.5;
+  ctx.shadowColor = `rgba(${scheme.primary.join(",")},0.6)`;
+  ctx.shadowBlur = 8;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  // Teeth around the rim
+  const toothCount = ri(10, 18);
+  for (let i = 0; i < toothCount; i++) {
+    const ang = (i / toothCount) * Math.PI * 2;
+    const baseX = cx + Math.cos(ang) * mouthR;
+    const baseY = cy + Math.sin(ang) * mouthR * 0.7;
+    const tipX = cx + Math.cos(ang) * mouthR * 0.7;
+    const tipY = cy + Math.sin(ang) * mouthR * 0.5;
+    ctx.beginPath();
+    ctx.moveTo(baseX, baseY);
+    ctx.lineTo(tipX, tipY);
+    ctx.strokeStyle = `rgba(${scheme.accent.join(",")},0.85)`;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+  // Inner tongue glow
+  const tongueGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, mouthR * 0.32);
+  tongueGrad.addColorStop(0, `rgba(${scheme.primary.join(",")},0.7)`);
+  tongueGrad.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = tongueGrad;
+  ctx.beginPath();
+  ctx.arc(cx, cy, mouthR * 0.32, 0, Math.PI * 2);
+  ctx.fill();
+  // Eyes above the mouth
+  const eyes = [
+    { x: cx - mouthR * 0.35, y: cy - mouthR * 0.9, r: mouthR * 0.09, px: 0, py: 0 },
+    { x: cx + mouthR * 0.35, y: cy - mouthR * 0.9, r: mouthR * 0.09, px: 0, py: 0 },
+  ];
+  return { eyes, coreR: mouthR, sigilR: mouthR * 1.5, bodyR: mouthR * 1.3, sigilType: "broken-arc" };
+}
+
+function buildSpecies_lattice(p) {
+  const { ctx, cx, cy, W, rng, r, ri, scheme } = p;
+  const lines = ri(12, 22);
+  for (let i = 0; i < lines; i++) {
+    const a1 = rng() * Math.PI * 2;
+    const a2 = a1 + Math.PI + (rng() - 0.5) * 1.0;
+    const r1 = r(W * 0.08, W * 0.20);
+    const r2 = r(W * 0.08, W * 0.20);
+    const x1 = cx + Math.cos(a1) * r1;
+    const y1 = cy + Math.sin(a1) * r1;
+    const x2 = cx + Math.cos(a2) * r2;
+    const y2 = cy + Math.sin(a2) * r2;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    const c = [scheme.primary, scheme.secondary, scheme.accent][Math.floor(rng() * 3)];
+    ctx.strokeStyle = `rgba(${c.join(",")},${r(0.3, 0.65)})`;
+    ctx.lineWidth = 1;
+    ctx.shadowColor = `rgba(${c.join(",")},0.5)`;
+    ctx.shadowBlur = 4;
+    ctx.stroke();
+  }
+  ctx.shadowBlur = 0;
+  const coreR = r(W * 0.04, W * 0.07);
+  drawSoftCore(ctx, cx, cy, coreR, scheme, ri(4, 6), rng);
+  const eyes = [{ x: cx, y: cy - coreR * 0.1, r: coreR * 0.5, px: 0, py: 0 }];
+  return { eyes, coreR, sigilR: W * 0.18, bodyR: W * 0.18, sigilType: "polygon" };
+}
+
+function buildSpecies_ribbon(p) {
+  const { ctx, cx, cy, W, rng, r, ri, scheme } = p;
+  const length = W * 0.7;
+  const startX = cx - length / 2;
+  const points = [];
+  const segs = 28;
+  const phase = rng() * Math.PI * 2;
+  for (let i = 0; i <= segs; i++) {
+    const t = i / segs;
+    const x = startX + t * length;
+    const y = cy + Math.sin(t * Math.PI * 3 + phase) * W * 0.10;
+    points.push({ x, y });
+  }
+  for (const pass of [{ w: 14, a: 0.15 }, { w: 7, a: 0.4 }, { w: 2.5, a: 0.85 }]) {
+    ctx.beginPath();
+    for (let i = 0; i < points.length; i++) {
+      if (i === 0) ctx.moveTo(points[i].x, points[i].y);
+      else ctx.lineTo(points[i].x, points[i].y);
+    }
+    ctx.strokeStyle = `rgba(${scheme.primary.join(",")},${pass.a})`;
+    ctx.lineWidth = pass.w;
+    ctx.lineCap = "round";
+    ctx.shadowColor = `rgba(${scheme.primary.join(",")},0.6)`;
+    ctx.shadowBlur = 5;
+    ctx.stroke();
+  }
+  ctx.lineCap = "butt";
+  ctx.shadowBlur = 0;
+  const eyes = [];
+  const numEyes = ri(2, 4);
+  for (let i = 0; i < numEyes; i++) {
+    const idx = Math.floor((i + 1) / (numEyes + 1) * segs);
+    const pt = points[idx];
+    eyes.push({ x: pt.x, y: pt.y - 4, r: W * 0.018, px: 0, py: 0 });
+  }
+  return { eyes, coreR: W * 0.06, sigilR: W * 0.18, bodyR: W * 0.18, sigilType: "none" };
+}
+
 const SPECIES_BUILDERS = {
   orb: buildSpecies_orb,
   wisp: buildSpecies_wisp,
@@ -2098,7 +2422,334 @@ const SPECIES_BUILDERS = {
   bloom: buildSpecies_bloom,
   seraph: buildSpecies_seraph,
   drone: buildSpecies_drone,
+  jellyfish: buildSpecies_jellyfish,
+  fungus: buildSpecies_fungus,
+  eyecluster: buildSpecies_eyecluster,
+  geode: buildSpecies_geode,
+  voidmouth: buildSpecies_voidmouth,
+  lattice: buildSpecies_lattice,
+  ribbon: buildSpecies_ribbon,
 };
+
+// ===== Modular accessory traits — overlay any species =====
+
+function rollTraits(rng) {
+  return {
+    crown:      rng() < 0.18,
+    horns:      rng() < 0.20,
+    halo:       rng() < 0.22,
+    brand:      rng() < 0.30,
+    mist:       rng() < 0.25,
+    shards:     rng() < 0.22,
+    drip:       rng() < 0.18,
+    cracks:     rng() < 0.15,
+    veins:      rng() < 0.20,
+    third_eye:  rng() < 0.12,
+    streamers:  rng() < 0.15,
+    rune_ring:  rng() < 0.18,
+  };
+}
+
+function applyTraits(ctx, body, traits, p) {
+  const { cx, cy, W, scheme, rng } = p;
+  if (traits.mist)      drawMistTrait(ctx, cx, cy, W, scheme, rng);
+  if (traits.shards)    drawShardsTrait(ctx, cx, cy, W, scheme, rng);
+  if (traits.streamers) drawStreamersTrait(ctx, cx, cy, body.coreR, scheme, rng);
+  if (traits.veins)     drawVeinsTrait(ctx, cx, cy, body.coreR, scheme, rng);
+  if (traits.cracks)    drawCracksTrait(ctx, cx, cy, body.coreR, scheme, rng);
+  if (traits.brand)     drawBrandTrait(ctx, cx, cy, body.coreR, scheme, rng);
+  if (traits.drip)      drawDripTrait(ctx, cx, cy, body.coreR, scheme, rng);
+  if (traits.halo)      drawHaloTrait(ctx, cx, cy, body.coreR, scheme, rng);
+  if (traits.horns)     drawHornsTrait(ctx, cx, cy, body.coreR, scheme, rng);
+  if (traits.crown)     drawCrownTrait(ctx, cx, cy, body.coreR, scheme, rng);
+  if (traits.rune_ring) drawRuneRing(ctx, cx, cy, body.coreR, scheme, rng);
+  if (traits.third_eye) {
+    body.eyes.push({
+      x: cx, y: cy - body.coreR * 0.85,
+      r: body.coreR * 0.13, px: 0, py: 0,
+      pupilType: "diamond",
+    });
+  }
+}
+
+function drawCrownTrait(ctx, cx, cy, R, scheme, rng) {
+  const points = 5 + Math.floor(rng() * 4);
+  const baseY = cy - R * 1.05;
+  const spikeH = R * 0.35;
+  const width = R * 1.5;
+  ctx.beginPath();
+  ctx.moveTo(cx - width / 2, baseY);
+  for (let i = 0; i < points - 1; i++) {
+    const t = (i + 0.5) / (points - 1);
+    const mx = cx - width / 2 + t * width;
+    ctx.lineTo(mx, baseY - spikeH * (0.6 + rng() * 0.6));
+    const nx = cx - width / 2 + (i + 1) / (points - 1) * width;
+    ctx.lineTo(nx, baseY);
+  }
+  ctx.strokeStyle = `rgba(${scheme.accent.join(",")},0.85)`;
+  ctx.lineWidth = 1.4;
+  ctx.shadowColor = `rgba(${scheme.accent.join(",")},0.6)`;
+  ctx.shadowBlur = 5;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+}
+
+function drawHornsTrait(ctx, cx, cy, R, scheme, rng) {
+  for (const side of [-1, 1]) {
+    const baseX = cx + side * R * 0.55;
+    const baseY = cy - R * 0.7;
+    const tipX = baseX + side * R * 0.45;
+    const tipY = baseY - R * 1.0;
+    ctx.beginPath();
+    ctx.moveTo(baseX, baseY);
+    ctx.quadraticCurveTo(baseX + side * R * 0.15, baseY - R * 0.55, tipX, tipY);
+    ctx.strokeStyle = `rgba(${scheme.secondary.join(",")},0.85)`;
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = "round";
+    ctx.shadowColor = `rgba(${scheme.secondary.join(",")},0.6)`;
+    ctx.shadowBlur = 4;
+    ctx.stroke();
+  }
+  ctx.lineCap = "butt";
+  ctx.shadowBlur = 0;
+}
+
+function drawHaloTrait(ctx, cx, cy, R, scheme, rng) {
+  const ringR = R * 1.6;
+  const ringY = cy - R * 1.35;
+  ctx.beginPath();
+  ctx.ellipse(cx, ringY, ringR, ringR * 0.18, 0, 0, Math.PI * 2);
+  ctx.strokeStyle = `rgba(${scheme.accent.join(",")},0.8)`;
+  ctx.lineWidth = 1.4;
+  ctx.shadowColor = `rgba(${scheme.accent.join(",")},0.6)`;
+  ctx.shadowBlur = 8;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+}
+
+function drawBrandTrait(ctx, cx, cy, R, scheme, rng) {
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(rng() * Math.PI * 2);
+  const sizeR = R * 0.4;
+  ctx.strokeStyle = `rgba(${scheme.accent.join(",")},0.85)`;
+  ctx.lineWidth = 1.3;
+  ctx.shadowColor = `rgba(${scheme.accent.join(",")},0.7)`;
+  ctx.shadowBlur = 4;
+  ctx.beginPath();
+  let px = -sizeR, py = 0;
+  ctx.moveTo(px, py);
+  for (let i = 0; i < 5; i++) {
+    px += sizeR * 0.4;
+    py += (rng() - 0.5) * sizeR * 0.7;
+    ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.restore();
+}
+
+function drawMistTrait(ctx, cx, cy, W, scheme, rng) {
+  for (let i = 0; i < 9; i++) {
+    const ang = rng() * Math.PI * 2;
+    const rad = W * (0.14 + rng() * 0.16);
+    const x = cx + Math.cos(ang) * rad;
+    const y = cy + Math.sin(ang) * rad;
+    const blobR = W * (0.05 + rng() * 0.07);
+    const grad = ctx.createRadialGradient(x, y, 0, x, y, blobR);
+    grad.addColorStop(0, `rgba(${scheme.secondary.join(",")},0.18)`);
+    grad.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(x, y, blobR, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawShardsTrait(ctx, cx, cy, W, scheme, rng) {
+  const count = 6 + Math.floor(rng() * 6);
+  for (let i = 0; i < count; i++) {
+    const ang = rng() * Math.PI * 2;
+    const rad = W * (0.18 + rng() * 0.16);
+    const x = cx + Math.cos(ang) * rad;
+    const y = cy + Math.sin(ang) * rad;
+    const size = 3 + rng() * 5;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(rng() * Math.PI * 2);
+    ctx.beginPath();
+    ctx.moveTo(-size, 0);
+    ctx.lineTo(0, -size * 0.6);
+    ctx.lineTo(size, 0);
+    ctx.lineTo(0, size * 0.6);
+    ctx.closePath();
+    ctx.strokeStyle = `rgba(${scheme.accent.join(",")},0.75)`;
+    ctx.lineWidth = 0.9;
+    ctx.shadowColor = `rgba(${scheme.accent.join(",")},0.6)`;
+    ctx.shadowBlur = 3;
+    ctx.stroke();
+    ctx.restore();
+  }
+  ctx.shadowBlur = 0;
+}
+
+function drawDripTrait(ctx, cx, cy, R, scheme, rng) {
+  const drips = 2 + Math.floor(rng() * 4);
+  for (let i = 0; i < drips; i++) {
+    const offsetX = (rng() - 0.5) * R * 1.4;
+    const startY = cy + R * 0.7;
+    const length = R * (0.5 + rng() * 0.9);
+    ctx.beginPath();
+    ctx.moveTo(cx + offsetX, startY);
+    ctx.lineTo(cx + offsetX, startY + length);
+    ctx.strokeStyle = `rgba(${scheme.accent.join(",")},0.7)`;
+    ctx.lineWidth = 1.5;
+    ctx.lineCap = "round";
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(cx + offsetX, startY + length, 1.8, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(${scheme.accent.join(",")},0.85)`;
+    ctx.fill();
+  }
+  ctx.lineCap = "butt";
+}
+
+function drawCracksTrait(ctx, cx, cy, R, scheme, rng) {
+  const cracks = 3 + Math.floor(rng() * 3);
+  for (let i = 0; i < cracks; i++) {
+    let px = cx + (rng() - 0.5) * R * 0.8;
+    let py = cy + (rng() - 0.5) * R * 0.8;
+    ctx.beginPath();
+    ctx.moveTo(px, py);
+    for (let s = 0; s < 4; s++) {
+      px += (rng() - 0.5) * R * 0.4;
+      py += (rng() - 0.5) * R * 0.4;
+      ctx.lineTo(px, py);
+    }
+    ctx.strokeStyle = "rgba(0,0,0,0.75)";
+    ctx.lineWidth = 0.9;
+    ctx.stroke();
+    ctx.strokeStyle = `rgba(${scheme.accent.join(",")},0.45)`;
+    ctx.lineWidth = 0.4;
+    ctx.stroke();
+  }
+}
+
+function drawVeinsTrait(ctx, cx, cy, R, scheme, rng) {
+  for (let i = 0; i < 4; i++) {
+    let px = cx, py = cy;
+    let ang = rng() * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(px, py);
+    for (let s = 0; s < 6; s++) {
+      ang += (rng() - 0.5) * 0.7;
+      px += Math.cos(ang) * R * 0.18;
+      py += Math.sin(ang) * R * 0.18;
+      ctx.lineTo(px, py);
+    }
+    ctx.strokeStyle = `rgba(${scheme.secondary.join(",")},0.45)`;
+    ctx.lineWidth = 0.6;
+    ctx.stroke();
+  }
+}
+
+function drawStreamersTrait(ctx, cx, cy, R, scheme, rng) {
+  // Long thin trailing ribbons drifting downward from the body
+  const count = 2 + Math.floor(rng() * 3);
+  for (let i = 0; i < count; i++) {
+    const startX = cx + (rng() - 0.5) * R * 1.2;
+    let py = cy + R * 0.6;
+    let px = startX;
+    ctx.beginPath();
+    ctx.moveTo(px, py);
+    for (let s = 0; s < 12; s++) {
+      px += Math.sin(s * 0.4 + i) * 3;
+      py += R * 0.18;
+      ctx.lineTo(px, py);
+    }
+    ctx.strokeStyle = `rgba(${scheme.primary.join(",")},${0.4 + rng() * 0.3})`;
+    ctx.lineWidth = 1.2;
+    ctx.shadowColor = `rgba(${scheme.primary.join(",")},0.5)`;
+    ctx.shadowBlur = 3;
+    ctx.stroke();
+  }
+  ctx.shadowBlur = 0;
+}
+
+function drawRuneRing(ctx, cx, cy, R, scheme, rng) {
+  // A ring of small runes circling the body
+  const ringR = R * 1.45;
+  const runeCount = 8 + Math.floor(rng() * 6);
+  for (let i = 0; i < runeCount; i++) {
+    const ang = (i / runeCount) * Math.PI * 2;
+    const x = cx + Math.cos(ang) * ringR;
+    const y = cy + Math.sin(ang) * ringR;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(ang + Math.PI / 2);
+    ctx.strokeStyle = `rgba(${scheme.accent.join(",")},0.7)`;
+    ctx.lineWidth = 1;
+    ctx.shadowColor = `rgba(${scheme.accent.join(",")},0.5)`;
+    ctx.shadowBlur = 2;
+    ctx.beginPath();
+    // Tiny rune: 2-3 short strokes
+    ctx.moveTo(-3, -2);
+    ctx.lineTo(2, -2);
+    ctx.moveTo(-2, 0);
+    ctx.lineTo(3, 0);
+    ctx.moveTo(-3, 2);
+    ctx.lineTo(2, 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+  ctx.shadowBlur = 0;
+}
+
+// ===== Eye pupil variants =====
+
+const PUPIL_TYPES = ["slit", "slit", "slit", "round", "round", "cross", "diamond", "spiral", "x"];
+function assignEyeVariants(eyes, rng) {
+  // Each form picks a primary pupil type for symmetry, sometimes
+  // mutates one eye for asymmetry / heterochromia.
+  const primary = PUPIL_TYPES[Math.floor(rng() * PUPIL_TYPES.length)];
+  for (const eye of eyes) {
+    if (eye.pupilType) continue;
+    if (rng() < 0.18) {
+      // Asymmetric — pick a different one
+      eye.pupilType = PUPIL_TYPES[Math.floor(rng() * PUPIL_TYPES.length)];
+    } else {
+      eye.pupilType = primary;
+    }
+  }
+}
+
+// ===== Procedural creature naming =====
+
+const NAME_PREFIXES = [
+  "vel","thal","or","mor","isk","nyx","cael","vor","ash","lir",
+  "soth","yren","umbra","kel","esh","quin","brae","tav","mel","ix",
+];
+const NAME_SUFFIXES = [
+  "en","ix","oth","ar","is","yn","el","us","or","ai","eth","il","om","ax","ru",
+];
+const NAME_TITLES = [
+  "the patient","the dim","the unfinished","who counts the rain",
+  "of slow water","the half-faded","of the second sleep","the rinsed",
+  "the soft-keeled","who hums to no one","the late returner",
+  "of the broken arc","keeper of small lights","the unwilling oracle",
+  "the gentle remainder","of the long apology",
+];
+
+function generateCreatureName(rng) {
+  const a = NAME_PREFIXES[Math.floor(rng() * NAME_PREFIXES.length)];
+  const b = NAME_SUFFIXES[Math.floor(rng() * NAME_SUFFIXES.length)];
+  const proper = a.charAt(0).toUpperCase() + a.slice(1) + b;
+  if (rng() < 0.55) {
+    const t = NAME_TITLES[Math.floor(rng() * NAME_TITLES.length)];
+    return `${proper}, ${t}`;
+  }
+  return proper;
+}
 
 function drawEye(ctx, eye, blinkAmt) {
   const ex = eye.x, ey = eye.y, eRad = eye.r;
@@ -2116,15 +2767,56 @@ function drawEye(ctx, eye, blinkAmt) {
   ctx.beginPath();
   ctx.arc(ex, ey, eRad, 0, Math.PI * 2);
   ctx.fill();
-  // Pupil — vertical slit, offset by tracking, squashed when blinking
+  // Pupil — variant by eye.pupilType
   const px = ex + eye.px;
   const py = ey + eye.py;
+  const squash = Math.max(0.05, 1 - blinkAmt);
+  const type = eye.pupilType || "slit";
   ctx.fillStyle = "#02050a";
-  ctx.beginPath();
-  const pupilH = Math.max(0.05, 1 - blinkAmt) * eRad * 0.78;
-  ctx.ellipse(px, py, eRad * 0.22, pupilH, 0, 0, Math.PI * 2);
-  ctx.fill();
-  // Eyelid sweep — horizontal bar covering iris during blink
+  if (type === "slit") {
+    ctx.beginPath();
+    ctx.ellipse(px, py, eRad * 0.22, eRad * 0.78 * squash, 0, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (type === "round") {
+    ctx.beginPath();
+    ctx.arc(px, py, eRad * 0.5 * squash, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (type === "cross") {
+    const arm = eRad * 0.55;
+    ctx.fillRect(px - arm, py - arm * 0.18, arm * 2, arm * 0.36);
+    ctx.fillRect(px - arm * 0.18, py - arm * squash, arm * 0.36, arm * 2 * squash);
+  } else if (type === "diamond") {
+    ctx.beginPath();
+    ctx.moveTo(px, py - eRad * 0.55 * squash);
+    ctx.lineTo(px + eRad * 0.42, py);
+    ctx.lineTo(px, py + eRad * 0.55 * squash);
+    ctx.lineTo(px - eRad * 0.42, py);
+    ctx.closePath();
+    ctx.fill();
+  } else if (type === "spiral") {
+    ctx.strokeStyle = "#02050a";
+    ctx.lineWidth = 1.1;
+    ctx.beginPath();
+    let started = false;
+    for (let t = 0; t < Math.PI * 4; t += 0.2) {
+      const sr = (t / (Math.PI * 4)) * eRad * 0.6;
+      const x = px + Math.cos(t) * sr;
+      const y = py + Math.sin(t) * sr;
+      if (!started) { ctx.moveTo(x, y); started = true; }
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  } else if (type === "x") {
+    ctx.strokeStyle = "#02050a";
+    ctx.lineWidth = 1.6;
+    const arm = eRad * 0.55;
+    ctx.beginPath();
+    ctx.moveTo(px - arm, py - arm); ctx.lineTo(px + arm, py + arm);
+    ctx.moveTo(px + arm, py - arm); ctx.lineTo(px - arm, py + arm);
+    ctx.stroke();
+  }
+
+  // Eyelid sweep
   if (blinkAmt > 0.02) {
     ctx.fillStyle = "rgba(2, 5, 10, 0.92)";
     ctx.fillRect(ex - eRad * 1.1, ey - eRad * blinkAmt, eRad * 2.2, eRad * blinkAmt * 2);
@@ -2267,12 +2959,15 @@ function buildFormDescription(seed) {
   const adj = pick(FORM_ADJ);
   const verb = pick(FORM_VERBS);
 
-  const speciesLabel = currentForm
-    ? `[species: ${currentForm.species} · ${currentForm.schemeName}]`
-    : "";
-
   let lines = [];
-  if (speciesLabel) lines.push(speciesLabel);
+  if (currentForm) {
+    lines.push(`name: ${currentForm.name}`);
+    lines.push(`[${currentForm.species} · ${currentForm.schemeName}]`);
+    const activeTraits = Object.entries(currentForm.traits || {})
+      .filter(([k, v]) => v)
+      .map(([k]) => k.replace("_", " "));
+    if (activeTraits.length) lines.push(`marks: ${activeTraits.join(", ")}`);
+  }
   lines.push(`a ${adj} ${noun}. it ${verb}.`);
 
   // Pull in invented teachings if any
@@ -2887,7 +3582,7 @@ function rebuildForm(seed) {
   currentForm = buildForm(seed);
   attachCanvas(currentForm, $sideCanvas);
   $sideWrap.classList.add("has-form");
-  $sideMeta.textContent = `${currentForm.species} · ${currentForm.schemeName}`;
+  $sideMeta.textContent = `${currentForm.name}\n${currentForm.species} · ${currentForm.schemeName}`;
   if (animHandle == null) animHandle = requestAnimationFrame(renderForm);
 }
 
